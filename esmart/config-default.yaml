@@ -48,21 +48,23 @@ import: []
 
 
 dataset:
-  folder: '/data10TB/dhuynh/data/wire-joint'
+  folder: ''
   random_state: 0
   train:
-    data_dir: 'train-subset'
-    file: 'train-subset.txt'
+    data_dir: ''
+    file: ''
+    upsampling: True
   valid:
     data_dir: ''
     file: ''
     split_ratio: 0.2
+    upsampling: True
   test:
-    data_dir: 'val'
-    file: 'val.txt'
+    data_dir: ''
+    file: ''
   data_arg:
-    num_classes: 2
-    class_names: ["background", "wire_joint"]
+    num_classes: -1
+    class_names: []
 
 builder: ''
 
