@@ -1,0 +1,9 @@
+import: []
+
+dummy:
+  class_name: DummyBuilder
+  img_size: 256
+  img_channels: 3
+  augmentation: True
+  activation: relu
+  dropout: 0.0

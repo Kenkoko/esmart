@@ -1,0 +1,10 @@
+import: []
+
+efficient_net:
+  class_name: EfficientNetBuilder
+  # img_size: 256 (Inapplicable)
+  img_channels: 3
+  augmentation: True
+  dropout: 0.3
+  initial_weight: imagenet
+  efficient_net_ver: B3

@@ -1,0 +1,193 @@
+
+# Control output is printed to the console.
+console:
+  # If set, no console output is produced
+  quiet: False
+
+  # Formatting of trace entries for console output after certain events, such as
+  # finishing an epoch. Each entry is a key-value pair, where the key refers to
+  # the type of event and the value is a Python expression (which may access
+  # variables "trace" and "config" as well as all trace entries). If no
+  # expression for a given key is specified or if the expression is empty, the
+  # full trace is produced.
+  #
+  # Supported keys: train_epoch, eval_epoch
+  #
+  # Example (one liners for train and eval):
+  # format:
+  #   train_epoch: 'f"{config.get(''train.type'')}-{config.get(''train.loss'')}: epoch={epoch:3d} avg_cost={avg_cost:.4E} avg_loss={avg_loss:.4E} avg_pens={sum(avg_penalties.values()):.4E} time={epoch_time:.2f}"'
+  #   eval_epoch: 'f"{config.get(''eval.type'')}: epoch={epoch:3d} {config.get(''valid.metric'')}={trace[config.get(''valid.metric'')]:.4E} time={epoch_time:.2f}"'
+  format: {}
+
+
+# The seeds of the PRNGs can be set manually for (increased) reproducibility.
+# Use -1 to disable explicit seeding.
+random_seed:
+  # Seed used to initialize each of the PRNGs below in case they do not have
+  # their own seed specified. The actual seed used computed from the value given
+  # here and the name of the PRNG (e.g., python, torch, ...). If -1, disable
+  # default seeding.
+  default: -1
+
+  python: -1
+  torch: -1
+  numpy: -1
+  numba: -1
+
+# Python modules that should be searched for models, embedders, jobs, etc.
+# LibKGE may not respect the module order specified here, so make sure to use
+# unique names. See also options 'import' and 'model' below.
+modules: [ esmart.job, esmart.builder ]
+
+# Names of additional configuration files to import. When this entry contains
+# entry NAME, then the modules above are searched for a file NAME.yaml, and this
+# file is imported into the configuration. By convention, NAME.yaml should have
+# a single top-level key NAME. Note that the configuration specified under
+# 'model' below is automatically imported in this way.
+import: []
+
+
+dataset:
+  folder: '/data10TB/dhuynh/data/wire-joint'
+  random_state: 0
+  train:
+    data_dir: 'train-subset'
+    file: 'train-subset.txt'
+  valid:
+    data_dir: ''
+    file: ''
+    split_ratio: 0.2
+  test:
+    data_dir: 'val'
+    file: 'val.txt'
+  data_arg:
+    num_classes: 2
+    class_names: ["background", "wire_joint"]
+
+builder: ''
+
+job:
+  type: train
+  #TODO: set this one again
+  device: cpu
+
+normal_training:
+  class_name: TrainingJobNormal
+  optimizer:
+    name: 'adam'
+    lr: 0.001
+
+two_stages_training:
+  class_name: TrainingTwoStages
+  unfreeze: 'all'
+  optimizer_1:
+    name: 'adam'
+    lr: 0.001
+  optimizer_2:
+    name: 'adam'
+    lr: 0.0001
+
+train: 
+  split: train
+  type: normal_training
+  loss: categorical_crossentropy
+  loss_arg: .nan
+  max_epochs: 200
+  batch_size: 64
+  shuffle_buffer_size_factor: 8
+  steps_per_epoch: 500
+  parsing_img:
+    training:
+      method: resize
+      size: -1 # take the img size of builder
+    inference:
+      method: resize
+
+  callbacks: 
+    early_stop:
+      monitor: val_accuracy
+      patience: 10
+    tensor_board: 
+      log_dic: ''
+      update_freq: 1
+    model_checkpoint: 
+      file_path: ''
+      monitor: val_accuracy
+      model: max
+      save_best_only: True
+    backup_restored:
+      backup_path: ''
+    lr_scheduler: ""
+    lr_scheduler_args:
+      +++: ++
+
+## VALIDATION AND EVALUATION ###################################################
+
+# Options used for all evaluation jobs (job.type=="eval"). Also used during
+# validation when training (unless overridden, see below). 
+eval:
+  # Split used for evaluation (specified under 'dataset.files').
+  split: valid
+
+  # Type of evaluation job (see respective configuration key) - eSmart ships with
+  # the following jobs: classification, object_detection
+  type: classification
+
+
+# Configuration options for model validation/selection during training. Applied
+# in addition to the options set under "eval" above.
+valid:
+  split: 'valid'
+  every: 1
+  metric: val_accuracy
+  metric_max: True
+  early_stopping:
+    patience: 5
+    threshold:
+      epochs: 0
+      metric_value: 0.0
+  trace_level: epoch
+
+
+## HYPERPARAMETER SEARCH #######################################################
+
+# Options of hyperparameter search jobs (job.type=="search").
+search:
+  # Type of search job (see respective configuration key). LibKGE ships with the
+  # following jobs: manual_search, grid_search, ax_search
+  type: ax_search
+
+  # Maximum number of parallel training jobs to run during a search.
+  num_workers: 1
+
+  # Device pool to use for training jobs. If this list is empty, `job.device` is
+  # used for all parallel searches. Otherwise, the first `search.num_workers`
+  # devices from this list are used. If the number of devices specified here is
+  # less than `search.num_workers`, the list wraps around so that devices are
+  # used by multiple jobs in parallel.
+  device_pool: [ ]
+
+  # What to do when an error occurs during a training job. Possible values:
+  # continue, abort
+  on_error: abort
+
+# Dynamic search job that picks configurations using ax
+ax_search:
+  class_name: AxSearchJob
+
+  # Total number of trials to run. Can be increased when a search job is
+  # resumed.
+  num_trials: 10
+
+  # Number of sobol trials to run (-1: automatic); remaining trials are GP+EI.
+  # If equal or larger than num_trials, only Sobal trials will be run.
+  num_sobol_trials: -1
+
+  # Random seed for generating the sobol sequence. Has to be fixed for each
+  # experiment, or else resuming the sobol sequence is inconsistent.
+  sobol_seed: 0
+
+  # Search space definition passed to ax. See create_experiment in
+  # https://ax.dev/api/service.html#module-ax.service.ax_client
+  parameters: []
+  parameter_constraints: []
