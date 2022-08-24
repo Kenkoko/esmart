@@ -11,7 +11,7 @@ setup(
         "numpy==1.23.1",
         "torch==1.12.0",
         "tensorflow==2.9.1",
-        "tensorflow-addons==0.17.1"
+        "tensorflow-addons==0.17.1",
         "pyyaml",
         "pandas",
         "path",
