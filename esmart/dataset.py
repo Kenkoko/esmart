@@ -9,7 +9,7 @@ import tensorflow as tf
 from sklearn.model_selection import train_test_split
 
 from typing import Dict, List, Any, Callable, Union, Optional
-
+from collections import Counter
 
 class Dataset(Configurable):
     """Stores information about a dataset.
@@ -50,6 +50,7 @@ class Dataset(Configurable):
             parts = line[:-1].split('|||')
             filepaths.append(os.path.join(data_dir, parts[0]))
             labels.append(self.class_names.index(parts[1]))
+        self.config.log(f'{file_data} contains {", ".join("{}: {}".format(self.class_names[k], v) for k, v in Counter(labels).most_common())}')
         return filepaths, labels
 
     def load_filepath(self, key: str):
@@ -59,12 +60,16 @@ class Dataset(Configurable):
                 #TODO make this more informative
                 if self.file_train == '':
                     raise ValueError('Need to input file train and folder path for training dataset')
+                self.config.log(f'Loading {key} from {self.file_train}')
                 file_paths, labels = self.read_filelist(self.file_train, self.folder_train)
                 if self.config.get(f"dataset.valid.data_dir") == '':
-                    X_train, _, y_train, _ = train_test_split(
+                    self.config.log(f"Validation director is None, create valid dataset from training dataset {self.file_train}")
+                    X_train, X_valid, y_train, y_valid = train_test_split(
                         file_paths, labels, 
                         test_size=self.config.get('dataset.valid.split_ratio'), 
                         random_state=self.config.get('dataset.random_state'))
+                    self._file_path['valid'] = X_valid
+                    self._labels['valid'] = y_valid
                 else:
                     X_train, y_train = file_paths, labels
                 self._file_path['train'] = X_train
@@ -75,13 +80,16 @@ class Dataset(Configurable):
                     #TODO make this more informative
                     if self.file_train == '':
                         raise ValueError('Need to input file train and folder path for training dataset')
-                    self.config.log(f"Validation director is None, create valid dataset from training")
+                    self.config.log(f"Validation director is None, create valid dataset from training dataset {self.file_train}")
                     file_paths, labels = self.read_filelist(self.file_train, self.folder_train)
-                    _, X_valid, _, y_valid = train_test_split(
+                    X_train, X_valid, y_train, y_valid = train_test_split(
                         file_paths, labels, 
                         test_size=self.config.get('dataset.valid.split_ratio'), 
                         random_state=self.config.get('dataset.random_state'))
+                    self._file_path['train'] = X_train
+                    self._labels['train'] = y_train
                 else:
+                    self.config.log(f'Loading {key} from {self.file_valid}')
                     X_valid, y_valid = self.read_filelist(self.file_valid, self.folder_valid)
 
                 self._file_path['valid'] = X_valid
@@ -90,10 +98,11 @@ class Dataset(Configurable):
             if key == 'test':
                 if self.file_test == '':
                     raise ValueError('Need to input file train and folder path for training dataset')
+                self.config.log(f'Loading {key} from {self.file_test}')
                 file_paths, labels = self.read_filelist(self.file_test, self.folder_test)
                 self._file_path['test'] = file_paths
                 self._labels['test'] = labels
-
+        self.config.log(f'{key} contains {", ".join("{}: {}".format(self.class_names[k], v) for k, v in Counter(self._labels[key]).most_common())}')
         return self._file_path[key], self._labels[key]
 
     def split(self, split: str):
