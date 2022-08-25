@@ -153,12 +153,21 @@ class TrainingJob(TrainingOrEvaluationJob):
             raise ValueError(f'Unknow eval type: {eval_type}')
 
     def create_parse_func(self, type_func):
+        r"""
+        create parsing function based on configuaration
+        """
         def _parse_func(file_data, label):
-            img_size = getattr(self, f'{type_func}_img_size')
-            print(f'img_size {type_func}', img_size)
+            
+            # loading image
             image_decoded = tf.image.decode_jpeg(
                 tf.io.read_file(file_data), channels=self.builder.get_option('img_channels'))
+
+            # resizing image
+            img_size = getattr(self, f'{type_func}_img_size')
             resize_method = self.config.get(f'train.parsing_img.{type_func}.method')
+            self.config.log(f'resize images by {resize_method} to {img_size} x {img_size} for {type_func} dataset')
+
+            ## get the resizing function
             resize_func = getattr(tf.image, resize_method)
             if resize_method == 'resize':
                 image_decoded = resize_func(image_decoded, (img_size, img_size))
@@ -166,8 +175,12 @@ class TrainingJob(TrainingOrEvaluationJob):
                 image_decoded = resize_func(image_decoded, img_size, img_size)
             else:
                 raise ValueError(f'Unknown resize method {resize_method}')
+
+            # encoding labels
             label = tf.one_hot(label, self.dataset.get_option('data_arg.num_classes'))
             return image_decoded, label
+
+        # returing the parsing function
         return _parse_func
 
     def create_current_trace(self, epoch, logs):
