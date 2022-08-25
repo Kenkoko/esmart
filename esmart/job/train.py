@@ -213,6 +213,7 @@ class TrainingJob(TrainingOrEvaluationJob):
 
     def _prepare(self):
         super()._prepare()
+        self.config.log(f'Preparing for training job')
         if not self.is_forward_only:
             ## logging
             tracer = tf.keras.callbacks.LambdaCallback(

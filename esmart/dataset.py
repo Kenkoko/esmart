@@ -10,6 +10,7 @@ from sklearn.model_selection import train_test_split
 
 from typing import Dict, List, Any, Callable, Union, Optional
 from collections import Counter
+from random import shuffle
 
 class Dataset(Configurable):
     """Stores information about a dataset.
@@ -53,6 +54,37 @@ class Dataset(Configurable):
         self.config.log(f'{file_data} contains {", ".join("{}: {}".format(self.class_names[k], v) for k, v in Counter(labels).most_common())}')
         return filepaths, labels
 
+    def upsampling_data(self, file_paths, labels):
+        class_num_examples = dict(Counter(labels))
+        for key,n_key in zip(class_num_examples.keys(), self.class_names):
+            class_num_examples[n_key] = class_num_examples.pop(key)
+        oversampling_weights = {}
+        upsampling_file_paths = []
+        labels_file_paths = []
+
+        for class_name in self.class_names:
+            oversampling_weights[class_name] = int(
+                round(
+                    max(class_num_examples.values())*1.0/class_num_examples[class_name]
+                    )
+            )
+
+        self.config.log(f'oversampling weight of each class: {oversampling_weights}')
+
+        # duplicate the file path weigth number of times.
+        for path, label in zip(file_paths, labels):
+            for _ in range(oversampling_weights[self.class_names[label]]):
+                upsampling_file_paths.append(path)
+                labels_file_paths.append(label)
+
+
+        zip_list = list(zip(upsampling_file_paths, labels_file_paths))
+        shuffle(zip_list)
+        upsampling_file_paths, labels_file_paths = zip(*zip_list)
+
+        self.config.log(f'upsampling results {", ".join("{}: {}".format(self.class_names[k], v) for k, v in Counter(labels_file_paths).most_common())}')
+        return list(upsampling_file_paths), list(labels_file_paths)
+
     def load_filepath(self, key: str):
         "load or return the path file with the specified key"
         if key not in self._file_path:
@@ -68,10 +100,20 @@ class Dataset(Configurable):
                         file_paths, labels, 
                         test_size=self.config.get('dataset.valid.split_ratio'), 
                         random_state=self.config.get('dataset.random_state'))
+
+                    # upsampling
+                    if self.config.get("dataset.valid.upsampling"):
+                        self.config.log("upsampling valid")
+                        X_valid, y_valid = self.upsampling_data(X_valid, y_valid)
+
                     self._file_path['valid'] = X_valid
                     self._labels['valid'] = y_valid
                 else:
                     X_train, y_train = file_paths, labels
+                
+                if self.config.get("dataset.train.upsampling"):
+                    self.config.log("upsampling training")
+                    X_train, y_train = self.upsampling_data(X_train, y_train)
                 self._file_path['train'] = X_train
                 self._labels['train'] = y_train
 
@@ -86,12 +128,21 @@ class Dataset(Configurable):
                         file_paths, labels, 
                         test_size=self.config.get('dataset.valid.split_ratio'), 
                         random_state=self.config.get('dataset.random_state'))
+
+                    if self.config.get("dataset.train.upsampling"):
+                        self.config.log("upsampling training")
+                        X_train, y_train = self.upsampling_data(X_train, y_train)
                     self._file_path['train'] = X_train
                     self._labels['train'] = y_train
+
                 else:
                     self.config.log(f'Loading {key} from {self.file_valid}')
                     X_valid, y_valid = self.read_filelist(self.file_valid, self.folder_valid)
-
+                    
+                # upsampling
+                if self.config.get("dataset.valid.upsampling"):
+                    self.config.log("upsampling valid")
+                    X_valid, y_valid = self.upsampling_data(X_valid, y_valid)
                 self._file_path['valid'] = X_valid
                 self._labels['valid'] = y_valid
 
@@ -102,6 +153,7 @@ class Dataset(Configurable):
                 file_paths, labels = self.read_filelist(self.file_test, self.folder_test)
                 self._file_path['test'] = file_paths
                 self._labels['test'] = labels
+
         self.config.log(f'{key} contains {", ".join("{}: {}".format(self.class_names[k], v) for k, v in Counter(self._labels[key]).most_common())}')
         return self._file_path[key], self._labels[key]
 

@@ -45,6 +45,7 @@ class TrainingTwoStages(TrainingJob):
         super()._prepare()
         
         filepaths, labels = self.dataset.split('train')
+        self.config.log('Preparing the training dataset')
         self.ds_train = tf.data.Dataset.from_tensor_slices((filepaths, labels))
         self.ds_train = self.ds_train.map(self.parse_func['training'], num_parallel_calls=tf.data.AUTOTUNE)
         self.ds_train = self.ds_train.shuffle(buffer_size=self.shuffle_buffer_size)
@@ -53,6 +54,7 @@ class TrainingTwoStages(TrainingJob):
         self.ds_train = self.ds_train.repeat()
 
         filepaths, labels = self.dataset.split('valid')
+        self.config.log('Preparing the validation dataset')
         self.ds_val = tf.data.Dataset.from_tensor_slices((filepaths, labels))
         self.ds_val = self.ds_val.map(self.parse_func['inference'], num_parallel_calls=tf.data.AUTOTUNE)
         self.ds_val = self.ds_val.batch(self.batch_size, drop_remainder=True)
