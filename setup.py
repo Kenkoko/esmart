@@ -15,6 +15,7 @@ setup(
         "pyyaml",
         "pandas",
         "path",
+        "matplotlib",
         "ax-platform==0.2.5.1",
     ],
     python_requires=">=3.9.12",
