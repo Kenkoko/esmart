@@ -159,8 +159,14 @@ class TrainingJob(TrainingOrEvaluationJob):
         def _parse_func(file_data, label):
             
             # loading image
-            image_decoded = tf.image.decode_jpeg(
-                tf.io.read_file(file_data), channels=self.builder.get_option('img_channels'))
+            try:
+                image_decoded = tf.image.decode_jpeg(
+                    tf.io.read_file(file_data), channels=self.builder.get_option('img_channels'))
+            except BaseException as e:
+                self.config.log(
+                    f"Aborting loading due to failure of loading file {file_data}"
+                )
+                raise e
 
             # resizing image
             img_size = getattr(self, f'{type_func}_img_size')
