@@ -73,6 +73,26 @@ def trace_best_result(self, result):
         **best,
     )
 
+
+def _custom_handler(job: "Job"):
+    """Custom the Tensorflow Logger"""
+    import tensorflow as tf
+
+    class EsmartHandler(StreamHandler):
+        def __init__(self, config):
+            StreamHandler.__init__(self)
+            self.config = config
+
+        def emit(self, record):
+            msg = self.format(record)
+            self.config.log(msg)
+    
+    tf_logger = tf.get_logger()
+    esmart_handler = EsmartHandler(job.config)
+    tf_logger.handlers = [esmart_handler]
+
+        
+
 class TrainingJob(TrainingOrEvaluationJob):
     def __init__(
         self, 
@@ -124,7 +144,9 @@ class TrainingJob(TrainingOrEvaluationJob):
         self.type_str: Optional[str] = None
 
         if self.__class__ == TrainingJob:
-            for f in Job.job_created_hooks:
+            hooks = Job.job_created_hooks.copy()
+            hooks.append(_custom_handler)
+            for f in hooks:
                 f(self)
 
     # TODO: Move to eval class

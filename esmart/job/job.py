@@ -2,25 +2,26 @@ from __future__ import annotations
 
 from esmart import Config, Dataset
 import uuid
-
+from logging import StreamHandler
 import os
 import socket
 from typing import Any, Callable, Dict, List, Optional
 
 def _trace_job_creation(job: "Job"):
     """Create a trace entry for a job"""
-    from torch import __version__ as torch_version
+    from tensorflow import __version__ as tf_version
 
     userhome = os.path.expanduser("~")
     username = os.path.split(userhome)[-1]
     job.trace_entry = job.trace(
         git_head='',
-        torch_version=torch_version,
+        tf_version=tf_version,
         username=username,
         hostname='',
         folder=job.config.folder,
         event="job_created",
     )
+
 
 
 def _save_job_config(job: "Job"):
