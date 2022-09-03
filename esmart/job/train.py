@@ -7,7 +7,7 @@ import numpy as np
 import tensorflow as tf
 import tensorflow_addons as tfa
 
-from esmart.util.metric import RecallMultiClass, PrecisionMultiClass
+from esmart.util.custom_metrics import RecallMultiClass, PrecisionMultiClass
 from esmart import Config, Dataset
 from esmart.builder import BaseBuilder
 from esmart.job import Job, TrainingOrEvaluationJob
