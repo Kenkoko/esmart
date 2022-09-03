@@ -56,8 +56,14 @@ class Dataset(Configurable):
 
     def upsampling_data(self, file_paths, labels):
         class_num_examples = dict(Counter(labels))
+
+        ## TODO: double-check this one
+        new_class_num_examples = class_num_examples.copy()
         for key,n_key in zip(class_num_examples.keys(), self.class_names):
-            class_num_examples[n_key] = class_num_examples.pop(key)
+            new_class_num_examples[n_key] = new_class_num_examples.pop(key)
+
+        class_num_examples =  new_class_num_examples
+
         oversampling_weights = {}
         upsampling_file_paths = []
         labels_file_paths = []
