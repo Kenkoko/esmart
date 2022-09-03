@@ -31,12 +31,30 @@ def _save_job_config(job: "Job"):
         os.makedirs(config_folder)
     job.config.save(os.path.join(config_folder, "{}.yaml".format(job.job_id[0:8])))
 
+def _custom_handler(job: "Job"):
+    """Custom the Tensorflow Logger"""
+    import tensorflow as tf
+
+    class EsmartHandler(StreamHandler):
+        def __init__(self, config):
+            StreamHandler.__init__(self)
+            self.config = config
+
+        def emit(self, record):
+            msg = self.format(record)
+            self.config.log(msg)
+    
+    tf_logger = tf.get_logger()
+    esmart_handler = EsmartHandler(job.config)
+    tf_logger.handlers = [esmart_handler]
+
 class Job:
     # Hooks run after job creation has finished
     # signature: job
     job_created_hooks: List[Callable[["Job"], Any]] = [
         _trace_job_creation,
         _save_job_config,
+        _custom_handler,
     ]
 
     def __init__(self, config: Config, dataset: Dataset, parent_job: "Job" = None):
