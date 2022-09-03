@@ -18,6 +18,7 @@ from esmart.util.metric import Metric
 from esmart.job.trace import Trace
 import matplotlib.pyplot as plt
 import torch
+import yaml
 
 def plot_hist(self, result):
     def merge_hist(dict_result):
@@ -130,8 +131,8 @@ class TrainingJob(TrainingOrEvaluationJob):
     def create_metrics(self, eval_type):
         if eval_type == 'classification':
             ## TODO: make this configurable
-            return [
-                'accuracy',
+            metrics = [
+                tf.keras.metrics.Accuracy(),
                 tfa.metrics.F1Score(
                     num_classes=self.dataset.get_option('data_arg.num_classes'), 
                     threshold=None, 
@@ -145,6 +146,10 @@ class TrainingJob(TrainingOrEvaluationJob):
                     threshold=None, 
                     average='macro'
                 ),
+                # PrecisionMultiClass(
+                #     num_classes=self.dataset.get_option('data_arg.num_classes')),
+                # RecallMultiClass(
+                #     num_classes=self.dataset.get_option('data_arg.num_classes')),
 
             ]
         elif eval_type == 'object_detection':
@@ -152,6 +157,14 @@ class TrainingJob(TrainingOrEvaluationJob):
             return []
         else:
             raise ValueError(f'Unknow eval type: {eval_type}')
+
+        # logging metrics
+        for metric in metrics:
+            metric_config = metric.get_config().copy()
+            self.config.log(metric_config['name'])
+            metric_config.pop('name', None)
+            self.config.log(yaml.dump(metric_config, default_flow_style=False), prefix="  ")
+        return metrics
 
     def create_parse_func(self, type_func):
         r"""

@@ -59,6 +59,8 @@ class RecallMultiClass(FBetaScore):
         dtype: AcceptableDTypes = None,
         **kwargs,
     ):
+        if average:
+            name = f'{average}_{name}'
         super().__init__(num_classes, average, beta, threshold, name=name, dtype=dtype)
 
     def result(self):
@@ -131,6 +133,8 @@ class PrecisionMultiClass(FBetaScore):
         dtype: AcceptableDTypes = None,
         **kwargs,
     ):
+        if average:
+            name = f'{average}_{name}'
         super().__init__(num_classes, average, beta, threshold, name=name, dtype=dtype)
 
     def result(self):
