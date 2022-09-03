@@ -15,7 +15,7 @@ class BaseBuilder(tf.keras.Model, Configurable):
         Configurable.__init__(self, config, configuration_key)
         self.dataset = dataset
 
-    def build_model(self) -> tf.keras.Model:
+    def build_model(self, weight=None) -> tf.keras.Model:
         raise NotImplemented
 
     @staticmethod

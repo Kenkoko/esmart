@@ -17,13 +17,14 @@ from tensorflow.keras.optimizers import Optimizer
 from esmart.util.metric import Metric
 from esmart.job.trace import Trace
 import matplotlib.pyplot as plt
+import torch
 
 def plot_hist(self, result):
     def merge_hist(dict_result):
         hist = {}
         
-        for history_callback in dict_result:
-            for key, value in history_callback.history.items():
+        for history in dict_result:
+            for key, value in history.items():
                 hist.setdefault(key, []).append(value)
 
         def flatten(l):
@@ -264,6 +265,44 @@ class TrainingJob(TrainingOrEvaluationJob):
 
             self.post_run_hooks.append(plot_hist)
             self.post_run_hooks.append(trace_best_result)
+
+
+    def save(self, filename) -> None:
+        """Save current state to specified file"""
+        self.config.log("Saving checkpoint to {}...".format(filename))
+        checkpoint = self.save_to({})
+        torch.save(
+            checkpoint,
+            filename,
+        )
+        self.config.log("Saving completed")
+
+    def save_to(self, checkpoint: Dict) -> Dict:
+        """Adds trainjob specific information to the checkpoint"""
+        train_checkpoint = {
+            "type": "train",
+            "valid_trace": self.valid_trace,
+            # "lr_scheduler_state_dict": self.kge_lr_scheduler.state_dict(),
+            "job_id": self.job_id,
+        }
+        train_checkpoint = self.config.save_to(train_checkpoint)
+        checkpoint.update(train_checkpoint)
+        return checkpoint
+
+    def _load(self, checkpoint: Dict) -> str:
+        if checkpoint["type"] != "train":
+            raise ValueError("Training can only be continued on trained checkpoints")
+        self.valid_trace = checkpoint["valid_trace"]
+        self.resumed_from_job_id = checkpoint.get("job_id")
+        self.trace(
+            event="job_resumed",
+            checkpoint_file=checkpoint["file"],
+        )
+        self.config.log(
+            "Resuming training from {} of job {}".format(
+                checkpoint["file"], self.resumed_from_job_id
+            )
+        )
 
     @staticmethod
     def create(
