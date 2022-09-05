@@ -140,7 +140,7 @@ class TrainingJob(TrainingOrEvaluationJob):
         if eval_type == 'classification':
             ## TODO: make this configurable
             metrics = [
-                tf.keras.metrics.Accuracy(),
+                'accuracy',
                 tfa.metrics.F1Score(
                     num_classes=self.dataset.get_option('data_arg.num_classes'), 
                     threshold=None, 
@@ -168,6 +168,9 @@ class TrainingJob(TrainingOrEvaluationJob):
 
         # logging metrics
         for metric in metrics:
+            if type(metric) == str:
+                self.config.log(metric)
+                continue
             metric_config = metric.get_config().copy()
             self.config.log(metric_config['name'])
             metric_config.pop('name', None)
