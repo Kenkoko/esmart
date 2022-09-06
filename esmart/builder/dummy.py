@@ -3,7 +3,7 @@ from esmart import Config, Dataset
 from esmart.builder.builder import BaseBuilder
 from tensorflow import keras
 from tensorflow.keras import layers
-
+from esmart.builder.esmart_model import EsmartModel
 
 class DummyBuilder(BaseBuilder):
     def __init__(
@@ -22,7 +22,7 @@ class DummyBuilder(BaseBuilder):
         self.activation = self.get_option('activation')
         self.dropout = self.get_option('dropout')
     
-    def build_model(self, weight) -> tf.keras.Model:
+    def build_model(self, weight = None) -> tf.keras.Model:
         inputs = keras.Input(shape=self.shape)
         data_augmentation = keras.Sequential(
             [
@@ -78,7 +78,7 @@ class DummyBuilder(BaseBuilder):
 
         x = layers.Dropout(self.dropout)(x)
         outputs = layers.Dense(2, activation="softmax")(x)
-        model = keras.Model(inputs, outputs)
+        model = EsmartModel(inputs, outputs)
         if weight:
             model.set_weights(weight)
         return model

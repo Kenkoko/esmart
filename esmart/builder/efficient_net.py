@@ -5,6 +5,7 @@ from tensorflow import keras
 from tensorflow.keras import layers
 from tensorflow.keras.layers.experimental import preprocessing
 from tensorflow.keras.models import Sequential
+from esmart.builder.esmart_model import EsmartModel
 
 class EfficientNetBuilder(BaseBuilder):
     def __init__(
@@ -60,7 +61,7 @@ class EfficientNetBuilder(BaseBuilder):
         self.initial_weight = self.get_option('initial_weight')
 
 
-    def build_model(self, weight) -> tf.keras.Model:
+    def build_model(self, weight: None) -> tf.keras.Model:
         inputs = layers.Input(shape=self.shape)
         #TODO: this
         img_augmentation = Sequential(
@@ -93,7 +94,8 @@ class EfficientNetBuilder(BaseBuilder):
             name="pred")(x)
 
         # Compile
-        model = tf.keras.Model(inputs, outputs, name="EfficientNet")
+        model = EsmartModel(inputs, outputs, name="EfficientNet")
+        # model = tf.keras.Model(inputs, outputs, name="EfficientNet")
         if weight:
             model.set_weights(weight)
         return model
