@@ -1,23 +1,21 @@
 def seed_python(seed):
     import random
-
     random.seed(seed)
 
 
 def seed_torch(seed):
     import torch
-
     torch.manual_seed(seed)
 
 
 def seed_numpy(seed):
     import numpy.random
-
     numpy.random.seed(seed)
 
 def seed_tf(seed):
     import tensorflow as tf
-    tf.random.set_seed(seed)
+    tf.keras.utils.set_random_seed(seed)
+    # tf.config.experimental.enable_op_determinism()
 
 def get_seed(config, what):
     seed = config.get(f"random_seed.{what}")
