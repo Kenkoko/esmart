@@ -79,6 +79,10 @@ class DummyBuilder(BaseBuilder):
         x = layers.Dropout(self.dropout)(x)
         outputs = layers.Dense(2, activation="softmax")(x)
         model = EsmartModel(inputs, outputs)
+        # model =  GAModelWrapper(inputs=inputs, outputs=outputs, accum_steps=2)
+        # model = tf.keras.Model(inputs, outputs)
+
+        # add weight if exists
         if weight:
             model.set_weights(weight)
         return model
