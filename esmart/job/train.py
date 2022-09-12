@@ -181,7 +181,7 @@ class TrainingJob(TrainingOrEvaluationJob):
         r"""
         create parsing function based on configuaration
         """
-        def _parse_func(file_data, label):
+        def _parse_func(file_data, label=None):
             
             # loading image
             try:
@@ -208,8 +208,11 @@ class TrainingJob(TrainingOrEvaluationJob):
                 raise ValueError(f'Unknown resize method {resize_method}')
 
             # encoding labels
-            label = tf.one_hot(label, self.dataset.get_option('data_arg.num_classes'))
-            return image_decoded, label
+            if label is not None:
+                label = tf.one_hot(label, self.dataset.get_option('data_arg.num_classes'))
+                return image_decoded, label
+            else:
+                return image_decoded
 
         # returing the parsing function
         return _parse_func
