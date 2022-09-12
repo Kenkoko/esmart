@@ -32,7 +32,7 @@ random_seed:
   python: -1
   torch: -1
   numpy: -1
-  numba: -1
+  tensorflow: -1
 
 # Python modules that should be searched for models, embedders, jobs, etc.
 # LibKGE may not respect the module order specified here, so make sure to use

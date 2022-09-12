@@ -15,7 +15,11 @@ def seed_numpy(seed):
 
     numpy.random.seed(seed)
 
+def seed_tf(seed):
+    import tensorflow as tf
 
+    tf.random.set_seed(seed) # should not use tf.keras.utils.set_random_seed as it sets the seed for numpy and random as well
+    # tf.config.experimental.enable_op_determinism()
 
 def get_seed(config, what):
     seed = config.get(f"random_seed.{what}")
@@ -44,10 +48,10 @@ def seed_from_config(config):
     seed = get_seed(config, "numpy")
     if seed > -1:
         seed_numpy(seed)
-
-    seed = get_seed(config, "numba")
+    
+    seed = get_seed(config, "tensorflow")
     if seed > -1:
-        seed_numba(seed)
+        seed_tf(seed)
 
 
 def seed_all(default_seed, python=-1, torch=-1, numpy=-1, numba=-1):
