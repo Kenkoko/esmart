@@ -1,0 +1,163 @@
+import pickle
+from pathlib import Path
+from typing import Iterable, List, Optional, Union
+
+import tensorflow as tf
+import tensorflow_addons as tfa
+import yaml
+from submodules.MOAP_core.factory.model_factory import ModelID
+from submodules.MOAP_core.utils.gcs_util import ensure_gcs_storage
+from tensorflow_addons.metrics.f_scores import FBetaScore
+from tensorflow_addons.utils.types import AcceptableDTypes, FloatTensorLike
+from typeguard import typechecked
+from submodules.MOAP_core.factory.model_factory import ModelID
+
+MODEL_ID = ModelID.{{ ID_MODEL }}
+
+def get_config():
+    # load yaml config file
+    with open("{}/config.yaml".format(Path(__file__).parent.absolute()), "r") as f:
+        config = yaml.safe_load(f)
+    config.update(
+        {
+        "MODELPATH": "{{ MODELPATH }}",
+        "LOCAL_MODELPATH": "{{ LOCAL_MODELPATH }}"
+        })
+    return config
+
+
+def get_model(config):
+    model = tf.keras.models.load_model(config["MODELPATH"],    custom_objects={
+        "F1Score": tfa.metrics.F1Score,
+        "PrecisionMultiClass": PrecisionMultiClass,
+        "RecallMultiClass": RecallMultiClass,
+    })
+    return model
+
+def get_labels(config):
+    return config['dataset']['data_arg']['class_names']
+
+def get_preprocessor(config, type_func):
+    r"""
+    create parsing function based on configuaration
+    """
+    if type_func not in ['training', 'inference']:
+        raise ValueError(f'Unknown type_func {type_func}')
+    
+    builder_name = config['builder']
+    
+    if type_func == 'training':
+        image_size = config['train']['parsing_img']['image_size']
+    else: # validation
+        if builder_name == 'efficient_net':
+            pre_train_vere = config[builder_name]['efficient_net_ver']
+            if pre_train_vere  == 'B0': 
+                image_size            = 224
+            elif pre_train_vere  == 'B1': 
+                image_size            = 240
+            elif pre_train_vere  == 'B2': 
+                image_size            = 260
+            elif pre_train_vere  == 'B3': 
+                image_size            = 300
+        else:
+            image_size = config[builder_name]['image_size']
+    
+    img_channels = config[builder_name]['img_channels']
+    def _parse_func(file_data, label):
+        # loading image
+        try:
+            image_decoded = tf.image.decode_jpeg(
+                tf.io.read_file(file_data), channels=img_channels)
+        except BaseException as e:
+            print("Aborting loading due to failure of loading file {}".format(file_data))
+            raise e
+
+        # resizing image
+        img_size = image_size
+        resize_method = config['train']['parsing_img'][type_func]['method']
+
+        ## get the resizing function
+        resize_func = getattr(tf.image, resize_method)
+        if resize_method == 'resize':
+            image_decoded = resize_func(image_decoded, (img_size, img_size))
+        elif resize_method == 'resize_with_pad':
+            image_decoded = resize_func(image_decoded, img_size, img_size)
+        else:
+            raise ValueError(f'Unknown resize method {resize_method}')
+
+        # encoding labels
+        label = tf.one_hot(label, config['dataset']['data_arg']['num_classes'])
+        return image_decoded, label
+
+    # returing the parsing function
+    return _parse_func
+
+def get_train_datasets():
+    # not used
+    # return ["crossarmtype-train1", "crossarmtype-train2"]
+    raise NotImplementedError
+
+def get_validation_datasets():
+    ## hard-code for now
+    return ["{{ validation_data }}"]
+
+def get_dip(config, context="validation"):
+
+    if context == "training":
+        datasets = get_train_datasets()
+    elif context == "validation":
+        datasets = get_validation_datasets()
+    else:
+        raise ValueError(f"Unknown context {context}")
+    
+    ## simulate the ds.get_filelist
+    with open("/home/dhuynh/workspaces/data/moap_crossarm_material_validation/{}/list_gen_get_filelist.pkl".format(datasets[0]), "rb") as input_file:
+        data = pickle.load(input_file)
+    ### generator from list
+    def gen(list):
+        for item in list:
+            yield item
+    gcs_files = gen(data)
+
+    batch_size: int = config['train']['batch_size']
+    shuffle_buffer_size = batch_size * config['train']['shuffle_buffer_size_factor']
+
+    # dataset = tf.data.Dataset.from_generator(lambda: gcs_files, (tf.string, tf.int32))
+    filepaths = []
+    labels = []
+    for file, label in gcs_files:
+        filepaths.append(file)
+        class_names = config['dataset']['data_arg']['class_names']
+        labels.append(class_names.index(label))
+    dataset = tf.data.Dataset.from_tensor_slices((filepaths, labels))
+    ### create dataset
+    if context == 'training':
+        parse_func = get_preprocessor(config, 'training')
+        dataset = dataset.map(parse_func, num_parallel_calls=tf.data.AUTOTUNE)
+        dataset = dataset.shuffle(buffer_size=shuffle_buffer_size)
+        dataset = dataset.batch(batch_size, drop_remainder=True)
+        dataset = dataset.prefetch(buffer_size=tf.data.AUTOTUNE)
+        dataset = dataset.repeat()
+    elif context == 'validation':
+        parse_func = get_preprocessor(config, 'inference')
+        dataset = dataset.map(parse_func, num_parallel_calls=tf.data.AUTOTUNE)
+        dataset = dataset.batch(batch_size)
+        # dataset = dataset.prefetch(buffer_size=tf.data.AUTOTUNE)
+    else:
+        raise ValueError(f'Unknown context {context}')
+    return dataset
+
+def get_postprocessor(config):
+    def _postprocess_func(preds):
+        labels = tf.math.argmax(preds, 1)
+        labels = tf.cast(labels, tf.float32)
+        probs = tf.math.reduce_max(preds, 1)
+        return tf.concat([tf.expand_dims(labels, 1), tf.expand_dims(probs, 1)], axis=1)
+    return _postprocess_func
+
+
+{{ RecallMultiClass }}
+
+{{ PrecisionMultiClass }}
+
+{{ generate_parser }}

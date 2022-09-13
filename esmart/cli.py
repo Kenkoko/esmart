@@ -11,6 +11,8 @@ from esmart import Config
 from esmart.job import Job
 from esmart.misc import get_git_revision_short_hash, esmart_base_dir, is_number
 # from esmart.util.dump import add_dump_parsers, dump
+# from esmart.util.package import add_package_parser, package
+from esmart.util.dev_code import add_dev_code_parser, dev_code
 from esmart.util.io import get_checkpoint_file, load_checkpoint
 from esmart.util.seed import seed_from_config
 import tensorflow as tf
@@ -119,6 +121,11 @@ def create_parser(config, additional_args=[]):
         help="Evaluate the result of a prior job using test data",
         parents=[parser_conf],
     )
+    # parser_dev = subparsers.add_parser(
+    #     "dev",
+    #     help="Create developement job (run with small data and few epochs)",
+    #     parents=[parser_conf],
+    # )
     for p in [parser_resume, parser_eval, parser_valid, parser_test]:
         p.add_argument("config", type=str)
         p.add_argument(
@@ -132,6 +139,7 @@ def create_parser(config, additional_args=[]):
         )
     # add_dump_parsers(subparsers)
     # add_package_parser(subparsers)
+    add_dev_code_parser(subparsers)
     return parser
 
 
@@ -171,7 +179,9 @@ def main():
         raise NotImplemented
         package_model(args)
         exit()
-
+    if args.command == "dev-code":
+        dev_code(args)
+        exit()
     # start command
     if args.command == "start":
         # use toy config file if no config given
