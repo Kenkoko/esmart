@@ -22,7 +22,7 @@ class DummyBuilder(BaseBuilder):
         self.activation = self.get_option('activation')
         self.dropout = self.get_option('dropout')
     
-    def build_model(self, weight) -> tf.keras.Model:
+    def build_model(self, weight=None) -> tf.keras.Model:
         inputs = keras.Input(shape=self.shape)
         data_augmentation = keras.Sequential(
             [
