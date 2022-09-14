@@ -285,7 +285,7 @@ def main():
             
             if args.command == "dev-code":
                 job = Job.create(config, dataset)
-                dev_code(args, config, dataset, job)
+                dev_code(config, dataset, job)
                 exit()
             # let's go
             if args.command == "resume":

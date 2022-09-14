@@ -18,7 +18,7 @@ def add_dev_code_parser(subparsers):
     # parser.add_argument('code', help='Code to add')
     # parser.set_defaults(func=dev_code)
 
-def dev_code(args, config: Config, dataset: Dataset, job: Job):
+def dev_code(config: Config, dataset: Dataset, job: Job):
     
     
     if isinstance(job, SearchJob):
@@ -46,7 +46,7 @@ def dev_code(args, config: Config, dataset: Dataset, job: Job):
         'PrecisionMultiClass': inspect.getsource(PrecisionMultiClass),
         'validation_data': 'moap_crossarm_material_validation',
         'val_image_size': job.builder.image_size,
-        'get_preprocessor': get_code(training_job.create_parse_func, replace_fun_name="get_preprocessor", remove_space=True),
+        'get_preprocessor': get_code(training_job.processor.get_processor, remove_space=True),
     }
 
     parent_folder = Path(__file__).parent.parent
@@ -60,20 +60,27 @@ def dev_code(args, config: Config, dataset: Dataset, job: Job):
 def get_code(object, replace_fun_name=None, remove_space=False):
     import re
 
-    regex = r"self.+"
+    ## object level
+    regex = r"self.*\([\w, =\"]*\)|self[.\w]*"
     self_obj = object.__self__
     fun_name = object.__name__
     object_code = inspect.getsource(object)
+
+
     object_code = object_code.replace('(self, ', '(')
     object_code = object_code.replace('self.config.log', 'print')
+
+
     if replace_fun_name:
         object_code = object_code.replace(fun_name, replace_fun_name)
     matches = re.finditer(regex, object_code, re.MULTILINE)
 
     for matchNum, match in enumerate(matches, start=1):
         exec_code = match.group()
+        print(exec_code)
         results = {}
         exec(f"result = {exec_code.replace('self', 'self_obj')}", {"self_obj":self_obj}, results)
+        print(results)
         if type(results['result']) == str:
             object_code = object_code.replace(exec_code, f'"{results["result"]}"')
         else:
@@ -84,6 +91,15 @@ def get_code(object, replace_fun_name=None, remove_space=False):
         num_space = list(matches)[0].start()
         object_code = object_code.replace(f'\n{" " * num_space}', "\n")
         object_code = object_code.strip()
+
+    # ## class level
+    # class_name = self_obj.__class__.__name__
+    # regex = fr"{class_name}[.\w]*"
+    
+    # matches = re.finditer(regex, object_code, re.MULTILINE)
+    # all_matches = set([match.group() for matchNum, match in enumerate(matches, start=1)])
+    # for match in all_matches:
+    #     exec(f"result = inspect.isfunction({match})", {class_name:class_name}, results)
 
     return object_code
 

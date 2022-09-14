@@ -108,3 +108,12 @@ def get_postprocessor(config):
 {{ PrecisionMultiClass }}
 
 {{ generate_parser }}
+
+## ------------------- Additional utils functions ---------------------------------
+
+{%- for function in utils_func %}
+    {{ function -}}
+{% endfor %}
+
+
+
