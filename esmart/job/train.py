@@ -181,12 +181,26 @@ class TrainingJob(TrainingOrEvaluationJob):
         r"""
         create parsing function based on configuaration
         """
+
+        if type_func not in ['training', 'inference']:
+            raise ValueError(f'Unknown type_func {type_func}')
+
+        if type_func == 'training':
+            input_img_size = self.training_img_size
+            resize_method_name = self.config.get('train.parsing_img.training.method')
+        elif type_func == 'inference':
+            input_img_size = self.inference_img_size
+            resize_method_name = self.config.get('train.parsing_img.inference.method')
+        img_channels = self.builder.get_option('img_channels')
+        num_classes = self.dataset.get_option('data_arg.num_classes')
+
+        ## make function become iconic
         def _parse_func(file_data, label=None):
-            
+
             # loading image
             try:
                 image_decoded = tf.image.decode_jpeg(
-                    tf.io.read_file(file_data), channels=self.builder.get_option('img_channels'))
+                    tf.io.read_file(file_data), channels=img_channels)
             except BaseException as e:
                 self.config.log(
                     f"Aborting loading due to failure of loading file {file_data}"
@@ -194,8 +208,8 @@ class TrainingJob(TrainingOrEvaluationJob):
                 raise e
 
             # resizing image
-            img_size = getattr(self, f'{type_func}_img_size')
-            resize_method = self.config.get(f'train.parsing_img.{type_func}.method')
+            img_size = input_img_size
+            resize_method = resize_method_name
             self.config.log(f'resize images by {resize_method} to {img_size} x {img_size} for {type_func} dataset')
 
             ## get the resizing function
@@ -209,7 +223,7 @@ class TrainingJob(TrainingOrEvaluationJob):
 
             # encoding labels
             if label is not None:
-                label = tf.one_hot(label, self.dataset.get_option('data_arg.num_classes'))
+                label = tf.one_hot(label, num_classes)
                 return image_decoded, label
             else:
                 return image_decoded
