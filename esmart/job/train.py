@@ -259,6 +259,10 @@ class TrainingJob(TrainingOrEvaluationJob):
                 verbose=0)
             self.callbacks.append(best_model)
 
+            ## early stopping
+            es_callback = tf.keras.callbacks.EarlyStopping(monitor='loss', patience=10)
+            self.callbacks.append(es_callback)
+
             ## add hook
             ## TODO: make this configuarable
 
