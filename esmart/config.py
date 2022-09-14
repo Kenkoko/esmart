@@ -445,7 +445,6 @@ class Config:
                 kwargs[key] = int(kwargs[key])
 
         line = yaml.dump(kwargs, width=float("inf"), default_flow_style=False).strip()
-        
         if echo or log:
             msg = yaml.dump(kwargs, default_flow_style=echo_flow)
             if log:

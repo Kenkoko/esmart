@@ -1,5 +1,6 @@
 
 import gc
+from logging import StreamHandler
 import os
 from typing import Any, Callable, Dict, List, Optional
 
@@ -7,7 +8,7 @@ import numpy as np
 import tensorflow as tf
 import tensorflow_addons as tfa
 
-from esmart.util.metric import RecallMultiClass, PrecisionMultiClass
+from esmart.util.custom_metrics import RecallMultiClass, PrecisionMultiClass
 from esmart import Config, Dataset
 from esmart.builder import BaseBuilder
 from esmart.job import Job, TrainingOrEvaluationJob
@@ -17,13 +18,15 @@ from tensorflow.keras.optimizers import Optimizer
 from esmart.util.metric import Metric
 from esmart.job.trace import Trace
 import matplotlib.pyplot as plt
+import torch
+import yaml
 
 def plot_hist(self, result):
     def merge_hist(dict_result):
         hist = {}
         
-        for history_callback in dict_result:
-            for key, value in history_callback.history.items():
+        for history in dict_result:
+            for key, value in history.items():
                 hist.setdefault(key, []).append(value)
 
         def flatten(l):
@@ -70,6 +73,11 @@ def trace_best_result(self, result):
         log=True,
         **best,
     )
+
+
+
+
+        
 
 class TrainingJob(TrainingOrEvaluationJob):
     def __init__(
@@ -122,6 +130,8 @@ class TrainingJob(TrainingOrEvaluationJob):
         self.type_str: Optional[str] = None
 
         if self.__class__ == TrainingJob:
+            # hooks = Job.job_created_hooks.copy()
+            # hooks.append(_custom_handler)
             for f in Job.job_created_hooks:
                 f(self)
 
@@ -129,7 +139,7 @@ class TrainingJob(TrainingOrEvaluationJob):
     def create_metrics(self, eval_type):
         if eval_type == 'classification':
             ## TODO: make this configurable
-            return [
+            metrics = [
                 'accuracy',
                 tfa.metrics.F1Score(
                     num_classes=self.dataset.get_option('data_arg.num_classes'), 
@@ -144,6 +154,10 @@ class TrainingJob(TrainingOrEvaluationJob):
                     threshold=None, 
                     average='macro'
                 ),
+                # PrecisionMultiClass(
+                #     num_classes=self.dataset.get_option('data_arg.num_classes')),
+                # RecallMultiClass(
+                #     num_classes=self.dataset.get_option('data_arg.num_classes')),
 
             ]
         elif eval_type == 'object_detection':
@@ -152,11 +166,22 @@ class TrainingJob(TrainingOrEvaluationJob):
         else:
             raise ValueError(f'Unknow eval type: {eval_type}')
 
+        # logging metrics
+        for metric in metrics:
+            if type(metric) == str:
+                self.config.log(metric)
+                continue
+            metric_config = metric.get_config().copy()
+            self.config.log(metric_config['name'])
+            metric_config.pop('name', None)
+            self.config.log(yaml.dump(metric_config, default_flow_style=False), prefix="  ")
+        return metrics
+
     def create_parse_func(self, type_func):
         r"""
         create parsing function based on configuaration
         """
-        def _parse_func(file_data, label):
+        def _parse_func(file_data, label=None):
             
             # loading image
             try:
@@ -183,8 +208,11 @@ class TrainingJob(TrainingOrEvaluationJob):
                 raise ValueError(f'Unknown resize method {resize_method}')
 
             # encoding labels
-            label = tf.one_hot(label, self.dataset.get_option('data_arg.num_classes'))
-            return image_decoded, label
+            if label is not None:
+                label = tf.one_hot(label, self.dataset.get_option('data_arg.num_classes'))
+                return image_decoded, label
+            else:
+                return image_decoded
 
         # returing the parsing function
         return _parse_func
@@ -268,6 +296,44 @@ class TrainingJob(TrainingOrEvaluationJob):
 
             self.post_run_hooks.append(plot_hist)
             self.post_run_hooks.append(trace_best_result)
+
+
+    def save(self, filename) -> None:
+        """Save current state to specified file"""
+        self.config.log("Saving checkpoint to {}...".format(filename))
+        checkpoint = self.save_to({})
+        torch.save(
+            checkpoint,
+            filename,
+        )
+        self.config.log("Saving completed")
+
+    def save_to(self, checkpoint: Dict) -> Dict:
+        """Adds trainjob specific information to the checkpoint"""
+        train_checkpoint = {
+            "type": "train",
+            "valid_trace": self.valid_trace,
+            # "lr_scheduler_state_dict": self.kge_lr_scheduler.state_dict(),
+            "job_id": self.job_id,
+        }
+        train_checkpoint = self.config.save_to(train_checkpoint)
+        checkpoint.update(train_checkpoint)
+        return checkpoint
+
+    def _load(self, checkpoint: Dict) -> str:
+        if checkpoint["type"] != "train":
+            raise ValueError("Training can only be continued on trained checkpoints")
+        self.valid_trace = checkpoint["valid_trace"]
+        self.resumed_from_job_id = checkpoint.get("job_id")
+        self.trace(
+            event="job_resumed",
+            checkpoint_file=checkpoint["file"],
+        )
+        self.config.log(
+            "Resuming training from {} of job {}".format(
+                checkpoint["file"], self.resumed_from_job_id
+            )
+        )
 
     @staticmethod
     def create(

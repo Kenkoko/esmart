@@ -22,7 +22,7 @@ class DummyBuilder(BaseBuilder):
         self.activation = self.get_option('activation')
         self.dropout = self.get_option('dropout')
     
-    def build_model(self) -> tf.keras.Model:
+    def build_model(self, weight=None) -> tf.keras.Model:
         inputs = keras.Input(shape=self.shape)
         data_augmentation = keras.Sequential(
             [
@@ -78,5 +78,8 @@ class DummyBuilder(BaseBuilder):
 
         x = layers.Dropout(self.dropout)(x)
         outputs = layers.Dense(2, activation="softmax")(x)
-        return keras.Model(inputs, outputs)
+        model = keras.Model(inputs, outputs)
+        if weight:
+            model.set_weights(weight)
+        return model
 

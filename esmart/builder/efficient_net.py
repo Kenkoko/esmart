@@ -60,7 +60,7 @@ class EfficientNetBuilder(BaseBuilder):
         self.initial_weight = self.get_option('initial_weight')
 
 
-    def build_model(self) -> tf.keras.Model:
+    def build_model(self, weight=None) -> tf.keras.Model:
         inputs = layers.Input(shape=self.shape)
         #TODO: this
         img_augmentation = Sequential(
@@ -94,5 +94,7 @@ class EfficientNetBuilder(BaseBuilder):
 
         # Compile
         model = tf.keras.Model(inputs, outputs, name="EfficientNet")
-        return keras.Model(inputs, outputs)
+        if weight:
+            model.set_weights(weight)
+        return model
 
