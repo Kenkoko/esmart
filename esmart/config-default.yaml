@@ -37,7 +37,7 @@ random_seed:
 # Python modules that should be searched for models, embedders, jobs, etc.
 # LibKGE may not respect the module order specified here, so make sure to use
 # unique names. See also options 'import' and 'model' below.
-modules: [ esmart.job, esmart.builder ]
+modules: [ esmart.job, esmart.builder, esmart.processor ]
 
 # Names of additional configuration files to import. When this entry contains
 # entry NAME, then the modules above are searched for a file NAME.yaml, and this
@@ -89,6 +89,8 @@ two_stages_training:
     name: 'adam'
     lr: 0.0001
 
+image_processor: ''
+
 train: 
   split: train
   type: normal_training
@@ -98,12 +100,7 @@ train:
   batch_size: 64
   shuffle_buffer_size_factor: 8
   steps_per_epoch: 500
-  parsing_img:
-    training:
-      method: resize
-      size: -1 # take the img size of builder
-    inference:
-      method: resize
+  
 
   callbacks: 
     early_stop:
