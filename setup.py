@@ -15,7 +15,7 @@ setup(
         "pandas",
         "path",
         "matplotlib",
-
+        "protobuf==3.20.*",
         "torch==1.12.0",
         "ax-platform==0.1.19", "botorch==0.4.0", "gpytorch==1.4.2",
         "sqlalchemy",
