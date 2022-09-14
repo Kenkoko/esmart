@@ -3,6 +3,7 @@ import gc
 from logging import StreamHandler
 import os
 from typing import Any, Callable, Dict, List, Optional
+from esmart.processor.processor import BaseProcessor
 
 import numpy as np
 import tensorflow as tf
@@ -75,10 +76,6 @@ def trace_best_result(self, result):
     )
 
 
-
-
-        
-
 class TrainingJob(TrainingOrEvaluationJob):
     def __init__(
         self, 
@@ -101,7 +98,13 @@ class TrainingJob(TrainingOrEvaluationJob):
         self.train_split = config.get("train.split")
 
         self.metrics = None
-        self.parse_func = {}
+
+        # create processor 
+        self.processor: BaseProcessor = BaseProcessor.create(config)
+        self.parse_func = {
+            'training': self.processor.get_processor('train'),
+            'inference': self.processor.get_processor('valid'),
+        }
 
         if not self.is_forward_only:
             self.optimizer: Optimizer = None
@@ -113,16 +116,16 @@ class TrainingJob(TrainingOrEvaluationJob):
             self.steps_per_epoch = config.get("train.steps_per_epoch")
 
             self.valid_trace: List[Dict[str, Any]] = []
-            self.training_img_size = self.config.get('train.parsing_img.training.size')
-            self.training_img_size = self.builder.image_size if self.training_img_size == -1 else self.training_img_size
-            self.parse_func['training'] = self.create_parse_func('training')
+            # self.training_img_size = self.config.get('train.parsing_img.training.size')
+            # self.training_img_size = self.builder.image_size if self.training_img_size == -1 else self.training_img_size
+            # self.parse_func['training'] = self.create_parse_func('training')
 
         # Hooks run after validation. The corresponding valid trace entry can be found
         # in self.valid_trace[-1] Signature: job
         self.post_valid_hooks: List[Callable[[Job], Any]] = []
 
-        self.inference_img_size = self.builder.image_size
-        self.parse_func['inference'] = self.create_parse_func('inference')
+        # self.inference_img_size = self.builder.image_size
+        # self.parse_func['inference'] = self.create_parse_func('inference')
 
         self.ds_train = None
         self.ds_val = None
@@ -177,59 +180,59 @@ class TrainingJob(TrainingOrEvaluationJob):
             self.config.log(yaml.dump(metric_config, default_flow_style=False), prefix="  ")
         return metrics
 
-    def create_parse_func(self, type_func):
-        r"""
-        create parsing function based on configuaration
-        """
+    # def create_parse_func(self, type_func):
+    #     r"""
+    #     create parsing function based on configuaration
+    #     """
 
-        if type_func not in ['training', 'inference']:
-            raise ValueError(f'Unknown type_func {type_func}')
+    #     if type_func not in ['training', 'inference']:
+    #         raise ValueError(f'Unknown type_func {type_func}')
 
-        if type_func == 'training':
-            input_img_size = self.training_img_size
-            resize_method_name = self.config.get('train.parsing_img.training.method')
-        elif type_func == 'inference':
-            input_img_size = self.inference_img_size
-            resize_method_name = self.config.get('train.parsing_img.inference.method')
-        img_channels = self.builder.get_option('img_channels')
-        num_classes = self.dataset.get_option('data_arg.num_classes')
+    #     if type_func == 'training':
+    #         input_img_size = self.training_img_size
+    #         resize_method_name = self.config.get('train.parsing_img.training.method')
+    #     elif type_func == 'inference':
+    #         input_img_size = self.inference_img_size
+    #         resize_method_name = self.config.get('train.parsing_img.inference.method')
+    #     img_channels = self.builder.get_option('img_channels')
+    #     num_classes = self.dataset.get_option('data_arg.num_classes')
 
-        ## make function become iconic
-        def _parse_func(file_data, label=None):
+    #     ## make function become iconic
+    #     def _parse_func(file_data, label=None):
 
-            # loading image
-            try:
-                image_decoded = tf.image.decode_jpeg(
-                    tf.io.read_file(file_data), channels=img_channels)
-            except BaseException as e:
-                self.config.log(
-                    f"Aborting loading due to failure of loading file {file_data}"
-                )
-                raise e
+    #         # loading image
+    #         try:
+    #             image_decoded = tf.image.decode_jpeg(
+    #                 tf.io.read_file(file_data), channels=img_channels)
+    #         except BaseException as e:
+    #             self.config.log(
+    #                 f"Aborting loading due to failure of loading file {file_data}"
+    #             )
+    #             raise e
 
-            # resizing image
-            img_size = input_img_size
-            resize_method = resize_method_name
-            self.config.log(f'resize images by {resize_method} to {img_size} x {img_size} for {type_func} dataset')
+    #         # resizing image
+    #         img_size = input_img_size
+    #         resize_method = resize_method_name
+    #         self.config.log(f'resize images by {resize_method} to {img_size} x {img_size} for {type_func} dataset')
 
-            ## get the resizing function
-            resize_func = getattr(tf.image, resize_method)
-            if resize_method == 'resize':
-                image_decoded = resize_func(image_decoded, (img_size, img_size))
-            elif resize_method == 'resize_with_pad':
-                image_decoded = resize_func(image_decoded, img_size, img_size)
-            else:
-                raise ValueError(f'Unknown resize method {resize_method}')
+    #         ## get the resizing function
+    #         resize_func = getattr(tf.image, resize_method)
+    #         if resize_method == 'resize':
+    #             image_decoded = resize_func(image_decoded, (img_size, img_size))
+    #         elif resize_method == 'resize_with_pad':
+    #             image_decoded = resize_func(image_decoded, img_size, img_size)
+    #         else:
+    #             raise ValueError(f'Unknown resize method {resize_method}')
 
-            # encoding labels
-            if label is not None:
-                label = tf.one_hot(label, num_classes)
-                return image_decoded, label
-            else:
-                return image_decoded
+    #         # encoding labels
+    #         if label is not None:
+    #             label = tf.one_hot(label, num_classes)
+    #             return image_decoded, label
+    #         else:
+    #             return image_decoded
 
-        # returing the parsing function
-        return _parse_func
+    #     # returing the parsing function
+    #     return _parse_func
 
     def create_current_trace(self, epoch, logs):
         self.current_trace["epoch"].update(

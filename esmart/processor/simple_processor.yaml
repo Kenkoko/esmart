@@ -1,0 +1,9 @@
+import: []
+
+simple_processor:
+  class_name: SimpleProcessor
+  training:
+    method: resize
+    size: -1 # take the img size of builder
+  inference:
+    method: resize
