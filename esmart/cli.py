@@ -121,12 +121,10 @@ def create_parser(config, additional_args=[]):
         help="Evaluate the result of a prior job using test data",
         parents=[parser_conf],
     )
-    # parser_dev = subparsers.add_parser(
-    #     "dev",
-    #     help="Create developement job (run with small data and few epochs)",
-    #     parents=[parser_conf],
-    # )
-    for p in [parser_resume, parser_eval, parser_valid, parser_test]:
+    parser_dev = subparsers.add_parser(
+        "dev-code", help="Run development code", parents=[parser_conf]
+    )
+    for p in [parser_resume, parser_eval, parser_valid, parser_test, parser_dev]:
         p.add_argument("config", type=str)
         p.add_argument(
             "--checkpoint",
@@ -139,7 +137,7 @@ def create_parser(config, additional_args=[]):
         )
     # add_dump_parsers(subparsers)
     # add_package_parser(subparsers)
-    add_dev_code_parser(subparsers)
+    # add_dev_code_parser(subparsers)
     return parser
 
 
@@ -168,6 +166,9 @@ def main():
     process_meta_command(
         args, "valid", {"command": "resume", "job.type": "eval", "eval.split": "valid"}
     )
+    # process_meta_command(
+    #     args, "dev-code", {"command": "resume"}
+    # )
     # dump command
     if args.command == "dump":
         raise NotImplemented
@@ -179,9 +180,7 @@ def main():
         raise NotImplemented
         package_model(args)
         exit()
-    if args.command == "dev-code":
-        dev_code(args)
-        exit()
+
     # start command
     if args.command == "start":
         # use toy config file if no config given
@@ -197,7 +196,7 @@ def main():
         config.load(args.config)
 
     # resume command
-    if args.command == "resume":
+    if args.command in ["resume", 'dev-code']:
         if os.path.isdir(args.config) and os.path.isfile(args.config + "/config.yaml"):
             args.config += "/config.yaml"
         if not vars(args)["console.quiet"]:
@@ -276,13 +275,18 @@ def main():
         # set random seeds
         seed_from_config(config)
 
+        
         # let's go
         if args.command == "start" and not args.run:
             config.log("Job created successfully.")
         else:
             # load data
             dataset = Dataset.create(config)
-
+            
+            if args.command == "dev-code":
+                job = Job.create(config, dataset)
+                dev_code(args, config, dataset, job)
+                exit()
             # let's go
             if args.command == "resume":
                 if checkpoint_file is not None:
@@ -299,6 +303,7 @@ def main():
                     )
             else:
                 job = Job.create(config, dataset)
+            
             job.run()
     except BaseException:
         tb = traceback.format_exc()
