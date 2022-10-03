@@ -367,6 +367,11 @@ class TrainingJob(TrainingOrEvaluationJob):
                                     min_lr=0.0001, 
                                     verbose=1,
                                     cooldown=2) ## https://stackoverflow.com/questions/51889378/how-to-use-keras-reducelronplateau
+            if callback_name == 'tensor_board':
+                log_dir = config.get('train.callbacks.tensor_board.log_dir')
+                if log_dir == '':
+                    log_dir = config.folder + '/tensorboard_logs'
+                callback = tf.keras.callbacks.TensorBoard(log_dir=log_dir, histogram_freq=1)
             if callback != None: 
                 callbacks.append(callback)
 

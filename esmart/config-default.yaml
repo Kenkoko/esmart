@@ -110,7 +110,7 @@ train:
       monitor: val_accuracy
       patience: 10
     tensor_board: 
-      log_dic: ''
+      log_dir: ''
       update_freq: 1
     model_checkpoint: 
       file_path: ''

@@ -30,7 +30,7 @@ class Config:
 
         self.log_folder: Optional[
             str
-        ] = None  # None means use self.folder; used for kge.log, trace.yaml
+        ] = None  # None means use self.folder; used for esmart.log, trace.yaml
 
         self.log_prefix: str = None
 
