@@ -12,7 +12,7 @@ setup(
         "tensorflow==2.8.0",
         "tensorflow-addons==0.16.1",
         "pyyaml",
-        "pandas=1.4.0",
+        "pandas==1.4.0",
         "path",
         "matplotlib",
         "protobuf==3.20.*",
