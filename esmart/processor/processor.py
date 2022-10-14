@@ -14,7 +14,8 @@ class BaseProcessor(Configurable):
     ) -> None:
         super().__init__(config, configuration_key)
 
-
+    def get_moap_preprocessor(self):
+        raise NotImplementedError
 
     def get_processor(self, context: str):
         """Get the processor for a given context. Context should be one of the following: train, validation, test, inference"""
