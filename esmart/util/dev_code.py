@@ -1,5 +1,6 @@
 #!/usr/bin/env python
-
+# esmart dev-code local/experiments/20221014-140027-toy-example-pull-request --cloud.model_path moap-crossarmtype-cls/m20220907 --cloud.model_id MOAP_CROSSARM_TYPE_CLASSIFIER --cloud.valid_dataset moap_crossarm_material_validation,cloud --cloud.train_dataset moap_crossarm_material_validation,cloud
+import copy
 import os
 import sys
 from esmart.config import Config
@@ -7,22 +8,24 @@ from esmart.dataset import Dataset
 from esmart.job.job import Job
 from esmart.job.search import SearchJob
 from esmart.job.train import TrainingJob
-from jinja2 import Template
+from jinja2 import Template, meta, FileSystemLoader, Environment
 from pathlib import Path
 import inspect
 from esmart.util.custom_metrics import RecallMultiClass, PrecisionMultiClass
+from esmart.misc import esmart_base_dir
+import yaml
 
 def add_dev_code_parser(subparsers):
-    parser = subparsers.add_parser('dev-code', help='Add development code')
-    # parser.add_argument('file', help='File to add development code to')
-    # parser.add_argument('code', help='Code to add')
-    # parser.set_defaults(func=dev_code)
+    # subparsers.add_argument('--cloud.valid_dataset', nargs="*", type=str, help='valid dataset', default=[])
+    # subparsers.add_argument('--cloud.train_dataset', nargs="*", type=str, help='train dataset', default=[])
+    pass
 
-def dev_code(config: Config, dataset: Dataset, job: Job):
+
+def dev_code(config: Config, dataset: Dataset, job):
     
     
     if isinstance(job, SearchJob):
-        raise Exception("Search jobs are not supported")
+        raise Exception("Search job is not supported now")
     elif isinstance(job, TrainingJob):
         print("Training job")
         training_job = job
@@ -31,75 +34,50 @@ def dev_code(config: Config, dataset: Dataset, job: Job):
     if not os.path.exists(dev_folder):
         os.makedirs(dev_folder)
 
+    parent_folder = Path(__file__).parent
+    template_folder = f'{parent_folder}/templates'
 
-    cloud_model_path = 'moap-crossarmtype-cls/m20220907'
-    premise_model_path = '/home/dhuynh/workspaces/joint-splice-detector/esmart/local/experiments/0.A.finished/20220824-223134-cross-arm-efficient-net-two-stages-padding'
 
-    config.set("deployment.mode_path", f"gs://esmart-model-repo/{cloud_model_path}/best_model.h5", create=True)
-    config.save(os.path.join(dev_folder, "config_dev.yaml"))
+    cloud_model_path = config.get('cloud.model_path')
+
+    print(config.options)
+    save_config: dict = copy.deepcopy(config.options)
+    
+    for item in ['console', 'modules', 'import', 'search', 'ax_search']:
+        save_config.pop(item, None)
+    premise_model_path = os.path.join(esmart_base_dir(), config.folder)
+    with open(os.path.join(dev_folder, "config_dev.yaml"), "w+") as file:
+        file.write(yaml.dump(save_config))
+
 
     parameters = {
-        'ID_MODEL': 'crossarmtype-cls',
+        'id_model': config.get('cloud.model_id'),
         'LOCAL_MODELPATH': f'{premise_model_path}/best_model.h5',
         'MODELPATH': f"gs://esmart-model-repo/{cloud_model_path}/best_model.h5",
+        'valid_datasets': config.get('cloud.valid_dataset'),
+        'train_datasets': config.get('cloud.train_dataset'),
+        'label_list': training_job.dataset.class_names,
+        'train_image_size': training_job.processor.train_img_size,
+        'valid_image_size': training_job.processor.valid_img_size,
+        'train_moap_preprocessor': training_job.processor.get_moap_preprocessor()['train_preprocessor'],
+        'valid_moap_preprocessor': training_job.processor.get_moap_preprocessor()['valid_preprocessor'],
+        'moap_lib': ', '.join(list(set(training_job.processor.get_moap_preprocessor().values()))),
         'RecallMultiClass': inspect.getsource(RecallMultiClass),
         'PrecisionMultiClass': inspect.getsource(PrecisionMultiClass),
-        'validation_data': 'moap_crossarm_material_validation',
-        'val_image_size': job.builder.image_size,
-        'get_preprocessor': get_code(training_job.processor.get_processor, remove_space=True),
+
     }
 
-    parent_folder = Path(__file__).parent.parent
-    with open(f"{parent_folder}/util/templates/modules.py.jinja") as file_: # open template
-        template = Template(file_.read())
-    msg = template.render(parameters)
+    # convert to string
+    for key, value in parameters.items():
+        if type(value) != str:
+            parameters[key] = f'{value}'
 
-    with open(f"{dev_folder}/modules.py", "w") as file_:
-        file_.write(msg)
-
-def get_code(object, replace_fun_name=None, remove_space=False):
-    import re
-
-    ## object level
-    regex = r"self.*\([\w, =\"]*\)|self[.\w]*"
-    self_obj = object.__self__
-    fun_name = object.__name__
-    object_code = inspect.getsource(object)
-
-
-    object_code = object_code.replace('(self, ', '(')
-    object_code = object_code.replace('self.config.log', 'print')
-
-
-    if replace_fun_name:
-        object_code = object_code.replace(fun_name, replace_fun_name)
-    matches = re.finditer(regex, object_code, re.MULTILINE)
-
-    for matchNum, match in enumerate(matches, start=1):
-        exec_code = match.group()
-        print(exec_code)
-        results = {}
-        exec(f"result = {exec_code.replace('self', 'self_obj')}", {"self_obj":self_obj}, results)
-        print(results)
-        if type(results['result']) == str:
-            object_code = object_code.replace(exec_code, f'"{results["result"]}"')
-        else:
-            object_code = object_code.replace(exec_code, f'{results["result"]}')
     
-    if remove_space:
-        matches = re.finditer(r"def ", object_code, re.MULTILINE)
-        num_space = list(matches)[0].start()
-        object_code = object_code.replace(f'\n{" " * num_space}', "\n")
-        object_code = object_code.strip()
+    jinja_env = Environment(
+        loader=FileSystemLoader(searchpath=template_folder),
+    )
+    print('jinja_env', jinja_env)
+    template = jinja_env.get_template('modules.py.j2')
+    template.stream(**parameters).dump(f'{dev_folder}/modules.py')
 
-    # ## class level
-    # class_name = self_obj.__class__.__name__
-    # regex = fr"{class_name}[.\w]*"
-    
-    # matches = re.finditer(regex, object_code, re.MULTILINE)
-    # all_matches = set([match.group() for matchNum, match in enumerate(matches, start=1)])
-    # for match in all_matches:
-    #     exec(f"result = inspect.isfunction({match})", {class_name:class_name}, results)
-
-    return object_code
 

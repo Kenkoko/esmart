@@ -20,6 +20,13 @@ console:
   format: {}
 
 
+# Cloud development code 
+cloud:
+  model_path: ''
+  model_id: ''
+  valid_dataset: [ ]
+  train_dataset: [ ]
+
 # The seeds of the PRNGs can be set manually for (increased) reproducibility.
 # Use -1 to disable explicit seeding.
 random_seed:

@@ -5,14 +5,17 @@ from typing import Iterable, List, Optional, Union
 import tensorflow as tf
 import tensorflow_addons as tfa
 import yaml
+from functools import partial
 from submodules.MOAP_core.factory.model_factory import ModelID
 from submodules.MOAP_core.utils.gcs_util import ensure_gcs_storage
 from tensorflow_addons.metrics.f_scores import FBetaScore
 from tensorflow_addons.utils.types import AcceptableDTypes, FloatTensorLike
 from typeguard import typechecked
 from submodules.MOAP_core.factory.model_factory import ModelID
+from deploy.submodules.MOAP_core.utils.postprocessor_utils import postprocessor_classifier
+from deploy.submodules.MOAP_core.utils.preprocessor_utils import {{ moap_lib }}
 
-MODEL_ID = ModelID.{{ ID_MODEL }}
+MODEL_ID = ModelID.{{ id_model }}
 
 def get_config():
     # load yaml config file
@@ -27,26 +30,37 @@ def get_config():
 
 
 def get_model(config):
-    model = tf.keras.models.load_model(config["MODELPATH"],    custom_objects={
-        "F1Score": tfa.metrics.F1Score,
-        "PrecisionMultiClass": PrecisionMultiClass,
-        "RecallMultiClass": RecallMultiClass,
-    })
+    model = tf.keras.models.load_model(config["MODELPATH"],
+        custom_objects={
+            "F1Score": tfa.metrics.F1Score,
+            "PrecisionMultiClass": PrecisionMultiClass,
+            "RecallMultiClass": RecallMultiClass,
+        }
+    )
     return model
 
 def get_labels(config):
-    return config['dataset']['data_arg']['class_names']
+    return {{ label_list }}
 
-{{ get_preprocessor }}
+def get_preprocessor(config, type_func):
+    r"""
+    create parsing function based on configuaration
+    """
+    if type_func not in ['training', 'inference']:
+        raise ValueError(f'Unknown type_func {type_func}')
+
+    if type_func == 'training':
+        return partial({{ train_moap_preprocessor }}, resize_to=({{ train_image_size }}, {{ train_image_size }}))
+    else: # validation
+        return partial({{ valid_moap_preprocessor }}, resize_to=({{ valid_image_size }}, {{ valid_image_size }}))
+    
+    
 
 def get_train_datasets():
-    # not used
-    # return ["crossarmtype-train1", "crossarmtype-train2"]
-    raise NotImplementedError
+    return {{ train_datasets }}
 
 def get_validation_datasets():
-    ## hard-code for now
-    return ["{{ validation_data }}"]
+    return {{ valid_datasets }}
 
 def get_dip(config, context="validation"):
 
@@ -95,25 +109,15 @@ def get_dip(config, context="validation"):
     return dataset
 
 def get_postprocessor(config):
-    def _postprocess_func(preds):
-        labels = tf.math.argmax(preds, 1)
-        labels = tf.cast(labels, tf.float32)
-        probs = tf.math.reduce_max(preds, 1)
-        return tf.concat([tf.expand_dims(labels, 1), tf.expand_dims(probs, 1)], axis=1)
-    return _postprocess_func
+    return postprocessor_classifier
 
+
+## ==================== custom metrics ====================
 
 {{ RecallMultiClass }}
 
 {{ PrecisionMultiClass }}
 
-{{ generate_parser }}
-
-## ------------------- Additional utils functions ---------------------------------
-
-{%- for function in utils_func %}
-    {{ function -}}
-{% endfor %}
 
 
 

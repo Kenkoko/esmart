@@ -59,9 +59,9 @@ class SimpleProcessor(BaseProcessor):
     def get_moap_preprocessor(self):
         output = []
         for method in [self.train_resize_method, self.valid_resize_method]:
-            if method is 'resize':
+            if method == 'resize':
                 output.append('raw_preprocessing_multi_crops_tensorflow')
-            elif method is 'resize_with_pad':
+            elif method == 'resize_with_pad':
                 output.append('raw_preprocessing_multi_crops_tensorflow_with_pad')
             else:
                 raise ValueError(f'Unknown resize method {method}')

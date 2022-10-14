@@ -124,6 +124,7 @@ def create_parser(config, additional_args=[]):
     parser_dev = subparsers.add_parser(
         "dev-code", help="Run development code", parents=[parser_conf]
     )
+    add_dev_code_parser(parser_dev)
     for p in [parser_resume, parser_eval, parser_valid, parser_test, parser_dev]:
         p.add_argument("config", type=str)
         p.add_argument(
@@ -137,7 +138,6 @@ def create_parser(config, additional_args=[]):
         )
     # add_dump_parsers(subparsers)
     # add_package_parser(subparsers)
-    # add_dev_code_parser(subparsers)
     return parser
 
 
@@ -230,7 +230,7 @@ def main():
         ]:
             continue
         if value is not None:
-            if key == "search.device_pool":
+            if key in ["search.device_pool", "cloud.train_dataset", "cloud.valid_dataset"]:
                 value = "".join(value).split(",")
             try:
                 if isinstance(config.get(key), bool):
