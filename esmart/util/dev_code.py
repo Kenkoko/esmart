@@ -61,6 +61,8 @@ def dev_code(config: Config, dataset: Dataset, job):
         'valid_image_size': training_job.processor.valid_img_size,
         'train_moap_preprocessor': training_job.processor.get_moap_preprocessor()['train_preprocessor'],
         'valid_moap_preprocessor': training_job.processor.get_moap_preprocessor()['valid_preprocessor'],
+        'batch_size': config.get('train.batch_size'),
+        'shuffle_buffer_size_factor': config.get('train.shuffle_buffer_size_factor'),
         'moap_lib': ', '.join(list(set(training_job.processor.get_moap_preprocessor().values()))),
         'RecallMultiClass': inspect.getsource(RecallMultiClass),
         'PrecisionMultiClass': inspect.getsource(PrecisionMultiClass),
@@ -76,7 +78,7 @@ def dev_code(config: Config, dataset: Dataset, job):
     jinja_env = Environment(
         loader=FileSystemLoader(searchpath=template_folder),
     )
-    print('jinja_env', jinja_env)
+    
     template = jinja_env.get_template('modules.py.j2')
     template.stream(**parameters).dump(f'{dev_folder}/modules.py')
 

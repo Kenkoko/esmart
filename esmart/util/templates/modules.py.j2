@@ -39,10 +39,10 @@ def get_model(config):
     )
     return model
 
-def get_labels(config):
+def get_labels():
     return {{ label_list }}
 
-def get_preprocessor(config, type_func):
+def get_preprocessor(type_func):
     r"""
     create parsing function based on configuaration
     """
@@ -63,45 +63,44 @@ def get_validation_datasets():
     return {{ valid_datasets }}
 
 def get_dip(config, context="validation"):
+    import dataset_manager as dm
+    from deploy.submodules.MOAP_core.utils.gcs_util import download_processing
 
     if context == "training":
-        datasets = get_train_datasets()
+        dataset_names = get_train_datasets()
     elif context == "validation":
-        datasets = get_validation_datasets()
+        dataset_names = get_validation_datasets()
     else:
         raise ValueError(f"Unknown context {context}")
-    
-    ## simulate the ds.get_filelist
-    with open("/home/dhuynh/workspaces/data/moap_crossarm_material_validation/{}/list_gen_get_filelist.pkl".format(datasets[0]), "rb") as input_file:
-        data = pickle.load(input_file)
-    ### generator from list
-    def gen(list):
-        for item in list:
-            yield item
-    gcs_files = gen(data)
 
-    batch_size: int = config['train']['batch_size']
-    shuffle_buffer_size = batch_size * config['train']['shuffle_buffer_size_factor']
-
-    # dataset = tf.data.Dataset.from_generator(lambda: gcs_files, (tf.string, tf.int32))
     filepaths = []
     labels = []
-    for file, label in gcs_files:
-        filepaths.append(file)
-        class_names = config['dataset']['data_arg']['class_names']
-        labels.append(class_names.index(label))
-    dataset = tf.data.Dataset.from_tensor_slices((filepaths, labels))
+    for dataset_name in dataset_names:
+        ds = dm.get_dataset(dataset_name)
+        download_dir = download_processing(ds, "cloud")
+        gcs_files = ds.get_filelist(file_path=download_dir, get_annotation=True)
+        for file, label in gcs_files:
+            filepaths.append(file)
+            labels.append(get_labels().index(label))
     ### create dataset
+
+    batch_size: int = {{ batch_size }}
+    shuffle_buffer_size = batch_size * {{ shuffle_buffer_size_factor }}
+    
+    dataset = tf.data.Dataset.from_tensor_slices((filepaths, labels))
     if context == 'training':
-        parse_func = get_preprocessor('training')
-        dataset = dataset.map(parse_func, num_parallel_calls=tf.data.AUTOTUNE)
+        dataset = dataset.map(lambda path, label: 
+            tf.py_function(parser_train_input, [path, label], [tf.float32, tf.float32]), 
+            num_parallel_calls=tf.data.AUTOTUNE)
         dataset = dataset.shuffle(buffer_size=shuffle_buffer_size)
         dataset = dataset.batch(batch_size, drop_remainder=True)
         dataset = dataset.prefetch(buffer_size=tf.data.AUTOTUNE)
         dataset = dataset.repeat()
     elif context == 'validation':
-        parse_func = get_preprocessor('inference')
-        dataset = dataset.map(parse_func, num_parallel_calls=tf.data.AUTOTUNE)
+        # dataset = dataset.map(parser_validation_input, num_parallel_calls=tf.data.AUTOTUNE)
+        dataset = dataset.map(lambda path, label: 
+            tf.py_function(parser_validation_input, [path, label], [tf.float32, tf.float32]), 
+            num_parallel_calls=tf.data.AUTOTUNE)
         dataset = dataset.batch(batch_size)
         # dataset = dataset.prefetch(buffer_size=tf.data.AUTOTUNE)
     else:
@@ -113,6 +112,21 @@ def get_postprocessor(config):
 
 
 ## ==================== custom metrics ====================
+
+def parser_train_input(image_path, label):
+    image_path = convert_tensor_to_string(image_path)
+    image = get_preprocessor('training')(image_path, crop_coords=[(0.0, 0.0, 1.0, 1.0)])[0]
+    label = tf.one_hot(label, len(get_labels()))
+    return image, label
+
+def parser_validation_input(image_path, label):
+    image_path = convert_tensor_to_string(image_path)
+    image = get_preprocessor('inference')(image_path, crop_coords=[(0.0, 0.0, 1.0, 1.0)])[0] ## get only 1 image
+    label = tf.one_hot(label, len(get_labels()))
+    return image, label
+
+def convert_tensor_to_string(tensor):
+    return tensor.numpy().decode("utf-8")
 
 {{ RecallMultiClass }}
 
