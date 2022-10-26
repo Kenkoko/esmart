@@ -67,45 +67,24 @@ def get_dip(config, context="validation"):
     from deploy.submodules.MOAP_core.utils.gcs_util import download_processing
 
     if context == "training":
+        batch_size: int = {{ batch_size }}
+        shuffle_buffer_size = batch_size * {{ shuffle_buffer_size_factor }}
         dataset_names = get_train_datasets()
+        train_datasets = []
+        val_datasets = []
+        for dataset_name in dataset_names:
+            if 'train' in dataset_name:
+                train_datasets.append(dataset_name)
+            elif 'val' in dataset_name:
+                val_datasets.append(dataset_name)
+            else:
+                raise ValueError(f'Unknown dataset type for {dataset_name}')
+        return get_train_val_ds(train_datasets, val_datasets, batch_size, shuffle_buffer_size)
     elif context == "validation":
         dataset_names = get_validation_datasets()
     else:
         raise ValueError(f"Unknown context {context}")
 
-    filepaths = []
-    labels = []
-    for dataset_name in dataset_names:
-        ds = dm.get_dataset(dataset_name)
-        download_dir = download_processing(ds, "cloud")
-        gcs_files = ds.get_filelist(file_path=download_dir, get_annotation=True)
-        for file, label in gcs_files:
-            filepaths.append(file)
-            labels.append(get_labels().index(label))
-    ### create dataset
-
-    batch_size: int = {{ batch_size }}
-    shuffle_buffer_size = batch_size * {{ shuffle_buffer_size_factor }}
-    
-    dataset = tf.data.Dataset.from_tensor_slices((filepaths, labels))
-    if context == 'training':
-        dataset = dataset.map(lambda path, label: 
-            tf.py_function(parser_train_input, [path, label], [tf.float32, tf.float32]), 
-            num_parallel_calls=tf.data.AUTOTUNE)
-        dataset = dataset.shuffle(buffer_size=shuffle_buffer_size)
-        dataset = dataset.batch(batch_size, drop_remainder=True)
-        dataset = dataset.prefetch(buffer_size=tf.data.AUTOTUNE)
-        dataset = dataset.repeat()
-    elif context == 'validation':
-        # dataset = dataset.map(parser_validation_input, num_parallel_calls=tf.data.AUTOTUNE)
-        dataset = dataset.map(lambda path, label: 
-            tf.py_function(parser_validation_input, [path, label], [tf.float32, tf.float32]), 
-            num_parallel_calls=tf.data.AUTOTUNE)
-        dataset = dataset.batch(batch_size)
-        # dataset = dataset.prefetch(buffer_size=tf.data.AUTOTUNE)
-    else:
-        raise ValueError(f'Unknown context {context}')
-    return dataset
 
 def get_postprocessor(config):
     return postprocessor_classifier
@@ -127,6 +106,45 @@ def parser_validation_input(image_path, label):
 
 def convert_tensor_to_string(tensor):
     return tensor.numpy().decode("utf-8")
+
+def get_filepaths_labels(dataset_names):
+    import dataset_manager as dm
+    from deploy.submodules.MOAP_core.utils.gcs_util import download_processing
+
+    filepaths = []
+    labels = []
+    for dataset_name in dataset_names:
+        ds = dm.get_dataset(dataset_name)
+        download_dir = download_processing(ds, "cloud")
+        gcs_files = ds.get_filelist(file_path=download_dir, get_annotation=True)
+        for file, label in gcs_files:
+            filepaths.append(file)
+            labels.append(get_labels().index(label))
+    return filepaths, labels
+
+def get_train_val_ds(train_datasets, val_datasets, batch_size, shuffle_buffer_size):
+    train_filepaths, train_labels = get_filepaths_labels(train_datasets)
+    val_filepaths, val_labels = get_filepaths_labels(val_datasets)
+
+    # training dataset
+    train_ds = tf.data.Dataset.from_tensor_slices((train_filepaths, train_labels))
+    train_ds = train_ds.map(lambda path, label: 
+        tf.py_function(parser_train_input, [path, label], [tf.float32, tf.float32]), 
+        num_parallel_calls=tf.data.AUTOTUNE)
+    train_ds = train_ds.shuffle(buffer_size=shuffle_buffer_size)
+    train_ds = train_ds.batch(batch_size, drop_remainder=True)
+    train_ds = train_ds.prefetch(buffer_size=tf.data.AUTOTUNE)
+    train_ds = train_ds.repeat()
+
+    # validation dataset
+    val_ds = tf.data.Dataset.from_tensor_slices((val_filepaths, val_labels))
+    val_ds = val_ds.map(lambda path, label: 
+        tf.py_function(parser_validation_input, [path, label], [tf.float32, tf.float32]), 
+        num_parallel_calls=tf.data.AUTOTUNE)
+    val_ds = val_ds.batch(batch_size)
+    return train_ds, val_ds
+    
+
 
 {{ RecallMultiClass }}
 

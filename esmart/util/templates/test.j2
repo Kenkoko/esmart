@@ -1,0 +1,18 @@
+def test(test_dataset:string):
+   """
+   test_dataset: Dataset that contain raw image to test
+   Test process: for each raw image, send it through [preprocessor][inferer][postprocessor] and verify the result, generating perf metrics
+   """
+
+   # Preprocess
+   preprocessor = Preprocessor()
+   preprocessor.preprocess(test_dataset)
+   
+   # Infer
+   inferer = Inferer()
+   inferer.infer(preprocessor.output)
+
+   # Postprocess
+   postprocessor = Postprocessor()
+   postprocessor.postprocess(inferer.output)
+    

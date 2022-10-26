@@ -1,0 +1,159 @@
+import pickle
+from pathlib import Path
+from typing import Iterable, List, Optional, Union
+
+import tensorflow as tf
+import tensorflow_addons as tfa
+import yaml
+from functools import partial
+from submodules.MOAP_core.factory.model_factory import ModelID
+from submodules.MOAP_core.utils.gcs_util import ensure_gcs_storage
+from tensorflow_addons.metrics.f_scores import FBetaScore
+from tensorflow_addons.utils.types import AcceptableDTypes, FloatTensorLike
+from typeguard import typechecked
+from submodules.MOAP_core.factory.model_factory import ModelID
+from deploy.submodules.MOAP_core.utils.postprocessor_utils import postprocessor_classifier
+from deploy.submodules.MOAP_core.utils.preprocessor_utils import {{ moap_lib }}
+
+MODEL_ID = ModelID.{{ id_model }}
+
+def get_config():
+    # load yaml config file
+    with open("{}/config_dev.yaml".format(Path(__file__).parent.absolute()), "r") as f:
+        config = yaml.safe_load(f)
+    config.update(
+        {
+        "MODELPATH": "{{ MODELPATH }}",
+        "LOCAL_MODELPATH": "{{ LOCAL_MODELPATH }}"
+        })
+    return config
+
+
+def get_model(config):
+    model = tf.keras.models.load_model(config["MODELPATH"],
+        custom_objects={
+            "F1Score": tfa.metrics.F1Score,
+            "PrecisionMultiClass": PrecisionMultiClass,
+            "RecallMultiClass": RecallMultiClass,
+        }
+    )
+    return model
+
+def get_labels():
+    return {{ label_list }}
+
+def get_preprocessor(type_func):
+    r"""
+    create parsing function based on configuaration
+    """
+    if type_func not in ['training', 'inference']:
+        raise ValueError(f'Unknown type_func {type_func}')
+
+    if type_func == 'training':
+        raise NotImplementedError
+    else: # validation
+        return partial({{ valid_moap_preprocessor }}, resize_to=({{ valid_image_size }}, {{ valid_image_size }}))
+    
+    
+
+def get_train_datasets():
+    return {{ train_datasets }}
+
+def get_validation_datasets():
+    return {{ valid_datasets }}
+
+def get_dip(config, context="validation"):
+    import dataset_manager as dm
+    from deploy.submodules.MOAP_core.utils.gcs_util import download_processing
+
+    if context == "training":
+        batch_size = {{ batch_size }}
+        shuffle_buffer_size = batch_size * {{ shuffle_buffer_size_factor }}
+        dataset_names = get_train_datasets()
+        train_datasets = []
+        val_datasets = []
+        for dataset_name in dataset_names:
+            if 'train' in dataset_name:
+                train_datasets.append(dataset_name)
+            elif 'val' in dataset_name:
+                val_datasets.append(dataset_name)
+            else:
+                raise ValueError(f'Unknown dataset type for {dataset_name}')
+        return get_train_val_ds(train_datasets, val_datasets, batch_size, shuffle_buffer_size)
+    elif context == "validation":
+        dataset_names = get_validation_datasets()
+    else:
+        raise ValueError(f"Unknown context {context}")
+
+
+
+def get_postprocessor(config):
+    return postprocessor_classifier
+
+
+# --------------------- Customize functions ---------------------
+
+def crop_preprocessing(image_filepath, resize_to):
+    import tensorflow as tf
+    raw = tf.io.read_file(image_filepath)
+    img = tf.io.decode_jpeg(raw, channels= {{channels}})
+    resize_img = tf.image.resize(img, resize_to, method="nearest")
+    assert resize_img.shape == (resize_to[0], resize_to[1], 3), "resize_img.shape: {}".format(resize_img.shape)
+    return resize_img
+
+def parser_train_input(image_path, label):
+    image = crop_preprocessing(image_path, resize_to=({{ valid_image_size }}, {{ valid_image_size }})) ## get only 1 image
+    assert image.shape == ({{ valid_image_size }}, {{ valid_image_size }}, {{channels}})
+    label = tf.one_hot(label, len(get_labels()))
+    return image, label
+
+def parser_validation_input(image_path, label):
+    image = crop_preprocessing(image_path, resize_to=({{ valid_image_size }}, {{ valid_image_size }})) ## get only 1 image
+    assert image.shape == ({{ valid_image_size }}, {{ valid_image_size }}, {{channels}})
+    label = tf.one_hot(label, len(get_labels()))
+    return image, label
+
+
+def get_filepaths_labels(dataset_names):
+    import dataset_manager as dm
+    from deploy.submodules.MOAP_core.utils.gcs_util import download_processing
+
+    filepaths = []
+    labels = []
+    for dataset_name in dataset_names:
+        ds = dm.get_dataset(dataset_name)
+        download_dir = download_processing(ds, "cloud")
+        gcs_files = ds.get_filelist(file_path=download_dir, get_annotation=True)
+        for file_path, label in gcs_files:
+            filepaths.append(file_path)
+            labels.append(get_labels().index(label))
+    return filepaths, labels
+
+def get_train_val_ds(train_datasets, val_datasets, batch_size, shuffle_buffer_size):
+    train_filepaths, train_labels = get_filepaths_labels(train_datasets)
+    val_filepaths, val_labels = get_filepaths_labels(val_datasets)
+
+    # training dataset
+    train_ds = tf.data.Dataset.from_tensor_slices((train_filepaths, train_labels))
+    train_ds = train_ds.map(parser_train_input, num_parallel_calls=tf.data.AUTOTUNE)
+    train_ds = train_ds.shuffle(buffer_size=shuffle_buffer_size)
+    train_ds = train_ds.batch(batch_size, drop_remainder=True)
+    train_ds = train_ds.prefetch(buffer_size=tf.data.AUTOTUNE)
+    train_ds = train_ds.repeat()
+
+    # validation dataset
+    val_ds = tf.data.Dataset.from_tensor_slices((val_filepaths, val_labels))
+    val_ds = val_ds.map(parser_validation_input, num_parallel_calls=tf.data.AUTOTUNE)
+    val_ds = val_ds.batch(batch_size, drop_remainder=True)
+    val_ds = val_ds.prefetch(buffer_size=tf.data.AUTOTUNE)
+    return train_ds, val_ds
+    
+## ==================== custom metrics ====================
+
+{{ RecallMultiClass }}
+
+{{ PrecisionMultiClass }}
+
+
+
+

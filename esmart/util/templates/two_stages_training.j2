@@ -1,0 +1,84 @@
+from modules import *
+import tensorflow_addons as tfa
+
+def train(config):
+    model = get_model(config)
+    train, val = get_dip(config, context="training")
+    metrics = [
+        'accuracy',
+        tfa.metrics.F1Score(
+            num_classes=len(get_labels()), 
+            threshold=None, 
+            average='macro'),
+        PrecisionMultiClass(
+            num_classes=len(get_labels()), 
+            threshold=None, 
+            average='macro'),
+        RecallMultiClass(
+            num_classes=len(get_labels()), 
+            threshold=None, 
+            average='macro'
+        ),
+    ]
+    callbacks = [
+        tf.keras.callbacks.ReduceLROnPlateau(
+            monitor='val_loss', factor=0.2,
+            patience=10, 
+            min_lr=0.0001, 
+            verbose=1,
+            cooldown=2), ## https://stackoverflow.com/questions/51889378/how-to-use-keras-reducelronplateau
+        tf.keras.callbacks.EarlyStopping(monitor='loss', patience=10),
+    ]
+
+    model.compile(
+        optimizer= get_optimizer({{optimizer_1}}, {{learning_rate_1}}),
+        loss= {{ loss }},
+        metrics=metrics,
+    )
+    model.fit(
+        train, 
+        steps_per_epoch={{ steps_per_epoch }},
+        epochs={{ epochs }},
+        validation_data=val,
+        callbacks=callbacks,
+        verbose=1)
+
+    unfreeze_layers(model, unfreeze = {{ unfreeze }})
+    model.compile(
+        optimizer= get_optimizer({{ optimizer_2 }}, {{ learning_rate_2 }}),
+        loss={{ loss }},
+        metrics=metrics,
+    )
+    model.fit(
+        train, 
+        steps_per_epoch={{ steps_per_epoch }},
+        epochs={{ epochs }},
+        validation_data=val,
+        callbacks=callbacks,
+        verbose=1)
+
+
+
+def unfreeze_layers(model, unfreeze):
+    if unfreeze == 'all':
+        for layer in model.layers:
+            if not isinstance(layer, layers.BatchNormalization):
+                self.config.log(f'unfreezing layer - {layer.name}')
+                layer.trainable = True
+    elif unfreeze == 'none':
+        for layer in model.layers[-None:]:
+            if not isinstance(layer, layers.BatchNormalization):
+                layer.trainable = True
+
+def get_optimizer(name, lr):
+        if name == 'adam':
+            optimizer = tf.keras.optimizers.Adam(learning_rate=lr)
+        elif name == 'adagrad':
+            optimizer = tf.keras.optimizers.Adagrad(learning_rate=lr)
+        elif name == 'sgd':
+            optimizer = tf.keras.optimizers.SGD(learning_rate=lr)
+        else:
+            raise ValueError(
+                "invalid value train.loss={}".format(name)
+            )
+        return optimizer

@@ -1,3 +1,4 @@
+import os
 import tensorflow as tf
 from esmart import Config, Dataset
 from esmart.builder.builder import BaseBuilder
@@ -5,6 +6,7 @@ from tensorflow import keras
 from tensorflow.keras import layers
 from tensorflow.keras.layers.experimental import preprocessing
 from tensorflow.keras.models import Sequential
+from esmart.augmentation.random_brightness import RandomBrightness
 
 class EfficientNetBuilder(BaseBuilder):
     def __init__(
@@ -53,6 +55,10 @@ class EfficientNetBuilder(BaseBuilder):
             self.EfficientNet = EfficientNet
         self.efficient_net_ver = self.get_option('efficient_net_ver')
         load_pretraind_efficient_net(self.efficient_net_ver)
+        # update config
+        self.config.set(f'{configuration_key}.img_size', self.image_size, create=True)
+        self.config.save(os.path.join(self.config.folder, "config.yaml"))
+
         self.img_channels = self.get_option('img_channels')
         self.shape = (None, None, self.img_channels,)
         self.augmentation = self.get_option('augmentation')
@@ -65,6 +71,7 @@ class EfficientNetBuilder(BaseBuilder):
         #TODO: this
         img_augmentation = Sequential(
             [
+                RandomBrightness(0.2),
                 preprocessing.RandomFlip(mode='horizontal'),
                 preprocessing.RandomRotation(factor=0.15),
                 preprocessing.RandomTranslation(height_factor=0.1, width_factor=0.1),
@@ -97,4 +104,6 @@ class EfficientNetBuilder(BaseBuilder):
         if weight:
             model.set_weights(weight)
         return model
+
+
 
