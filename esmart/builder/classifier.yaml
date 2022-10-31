@@ -1,0 +1,19 @@
+import: []
+
+classifier:
+  class_name: ClassifierBuilder
+  pretrain_model: efficientnet_v2
+  version: b3
+  img_size: -1
+  img_channels: 3
+  augmentation: ''
+  regularize: 
+    type: l2
+    penalty: 0.001
+  cls_layer:
+    dropout_rate: 0.3
+    activation: softmax
+    batch_normalization:
+        +++: +++
+        
+    

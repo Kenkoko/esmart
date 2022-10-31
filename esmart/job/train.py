@@ -337,6 +337,8 @@ class TrainingJob(TrainingOrEvaluationJob):
             optimizer = tf.keras.optimizers.Adagrad(learning_rate=lr)
         elif name == 'sgd':
             optimizer = tf.keras.optimizers.SGD(learning_rate=lr)
+        elif name == 'adadelta':
+            optimizer = tf.keras.optimizers.Adadelta(learning_rate=lr)
         else:
             raise ValueError(
                 "invalid value train.loss={}".format(name)

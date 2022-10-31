@@ -104,6 +104,14 @@ class Config:
                     # try further
                     continue
 
+    def check_default(self, key: str, allowed_values) -> Any:
+        """Raise an error if value or default value of key is not in allowed.
+
+        If fine, returns value.
+        """
+        return self._check(key, self.get_default(key), allowed_values)
+
+
     def exists(self, key: str, remove_plusplusplus=True) -> bool:
         try:
             self.get(key, remove_plusplusplus)
