@@ -47,12 +47,15 @@ def dev_code(config: Config, dataset: Dataset, job):
     with open(os.path.join(dev_folder, "config_dev.yaml"), "w+") as file:
         file.write(yaml.dump(save_config))
 
+    jinja_env = Environment(
+        loader=FileSystemLoader(searchpath=template_folder),
+    )
 
     parameters = {
         # general parameters
         'id_model': config.get('cloud.model_id'),
         'LOCAL_MODELPATH': f'{premise_model_path}/best_model.h5',
-        'MODELPATH': f"gs://esmart-model-repo/{cloud_model_path}/best_model.h5",
+        'MODELPATH': f"gs://esmart-model-repo/{cloud_model_path}/model.h5",
         'valid_datasets': config.get('cloud.valid_dataset'),
         'train_datasets': config.get('cloud.train_dataset'),
         # general parameters
@@ -69,26 +72,12 @@ def dev_code(config: Config, dataset: Dataset, job):
         'PrecisionMultiClass': inspect.getsource(PrecisionMultiClass),
         'steps_per_epoch': config.get("train.steps_per_epoch"),
         'max_epochs': config.get("train.max_epochs"),
-        'loss': "'{}'".format(config.get('train.loss')),
+        'loss': config.get('train.loss'),
     }
 
-    # convert to string
-    for key, value in parameters.items():
-        if type(value) != str:
-            parameters[key] = f'{value}'
-
-    
-    jinja_env = Environment(
-        loader=FileSystemLoader(searchpath=template_folder),
-    )
-    
-    template = jinja_env.get_template('modules.v2.j2')
-    template.stream(**parameters).dump(f'{dev_folder}/modules.py')
-
     training_type = config.get('train.type')
-
     if training_type == 'normal_training':
-        template = jinja_env.get_template('normal_training.j2')
+        template_train = jinja_env.get_template('normal_training.j2')
         optimizer = config.get('normal_training.optimizer.name')
         learning_rate = config.get('normal_training.optimizer.lr')
         parameters.update({
@@ -96,23 +85,33 @@ def dev_code(config: Config, dataset: Dataset, job):
             "learning_rate": str(learning_rate), 
         })
     elif training_type == 'two_stages_training':
-        template = jinja_env.get_template('two_stages_training.j2')
-        optimizer_1 = config.get('two_stages_training.optimizer_1.name')
-        optimizer_2 = config.get('two_stages_training.optimizer_2.name')
-        learning_rate_1 = config.get('two_stages_training.optimizer_1.lr')
-        learning_rate_2 = config.get('two_stages_training.optimizer_2.lr')
-        unfreeze = config.get('two_stages_training.unfreeze').lower()
+        template_train = jinja_env.get_template('two_stages_training.j2')
         parameters.update({
-            "optimizer_1": f"'{optimizer_1}'",
-            "learning_rate_1": str(learning_rate_1),
-            "optimizer_2": f"'{optimizer_2}'",
-            "learning_rate_2": str(learning_rate_2),
-            "unfreeze": f"'{unfreeze}'",
+            "optimizer_1": config.get('two_stages_training.optimizer_1.name'),
+            "learning_rate_1": config.get('two_stages_training.optimizer_1.lr'),
+            "optimizer_2": config.get('two_stages_training.optimizer_2.name'),
+            "learning_rate_2": config.get('two_stages_training.optimizer_2.lr'),
+            "unfreeze": config.get('two_stages_training.unfreeze').lower(),
         })
     else:
         raise Exception("Training type is not supported")
 
-    template.stream(**parameters).dump(f'{dev_folder}/train.py')
+    # convert to string
+    for key, value in parameters.items():
+        if type(value) != str:
+            parameters[key] = f'{value}'
+
+    
+
+    template_module = jinja_env.get_template('modules.v2.j2')
+    template_test = jinja_env.get_template('test.j2')
+    template_import = jinja_env.get_template('config.j2')
+
+    template_module.stream(**parameters).dump(f'{dev_folder}/modules.py')
+    template_train.stream(**parameters).dump(f'{dev_folder}/train.py')
+    template_test.stream(**parameters).dump(f'{dev_folder}/test.py')
+    template_import.stream(**parameters).dump(f'{dev_folder}/config.py')
+
 
 
 

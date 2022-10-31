@@ -1,18 +1,18 @@
-def test(test_dataset:string):
+from modules import *
+
+def test():
    """
    test_dataset: Dataset that contain raw image to test
    Test process: for each raw image, send it through [preprocessor][inferer][postprocessor] and verify the result, generating perf metrics
    """
-
-   # Preprocess
-   preprocessor = Preprocessor()
-   preprocessor.preprocess(test_dataset)
-   
-   # Infer
-   inferer = Inferer()
-   inferer.infer(preprocessor.output)
-
-   # Postprocess
-   postprocessor = Postprocessor()
-   postprocessor.postprocess(inferer.output)
-    
+   config = get_config()
+   # load dataset
+   filepaths, metadata = get_dip(config, context="inference")
+   preprocessor = get_preprocessor("inference")
+   postprocessor = get_postprocessor(config)
+   model = get_model(config)
+   for i, (imagepath, meta) in enumerate(zip(filepaths, metadata)):
+       preprocessed_images = preprocessor(imagepath, crop_coords=meta["coords"])
+       inferer = postprocessor(model, preprocessed_images)
+       print(inferer)
+       break

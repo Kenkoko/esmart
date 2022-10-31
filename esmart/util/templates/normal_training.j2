@@ -30,8 +30,8 @@ def train(config):
         tf.keras.callbacks.EarlyStopping(monitor='loss', patience=10),
     ]
     model.compile(
-        optimizer= get_optimizer({{ optimizer }}, {{ learning_rate }}),
-        loss= {{ loss }},
+        optimizer= get_optimizer("{{ optimizer }}", {{ learning_rate }}),
+        loss= "{{ loss }}",
         metrics=metrics,
     )
 

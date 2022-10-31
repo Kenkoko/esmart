@@ -212,10 +212,13 @@ def main():
 
     ## TODO: make this more easier to access devices
     gpu_id = config.get('job.device').split(", ")
-    gpus = tf.config.list_physical_devices('GPU')
-    config.log(f'GPU id: {gpu_id}')
-    using_gpu = [gpus[int(id)] for id in gpu_id]
-    tf.config.set_visible_devices(using_gpu, 'GPU')
+    if 'CPU' in gpu_id:
+        tf.config.set_visible_devices([], 'GPU')
+    else:
+        gpus = tf.config.list_physical_devices('GPU')
+        config.log(f'GPU id: {gpu_id}')
+        using_gpu = [gpus[int(id)] for id in gpu_id]
+        tf.config.set_visible_devices(using_gpu, 'GPU')
 
 
     # overwrite configuration with command line arguments
@@ -284,7 +287,9 @@ def main():
             dataset = Dataset.create(config)
             
             if args.command == "dev-code":
-                job = Job.create(config, dataset)
+                training_jb_config = config.clone()
+                training_jb_config.set('console.quiet', True)
+                job = Job.create(training_jb_config, dataset)
                 dev_code(config, dataset, job)
                 exit()
             # let's go

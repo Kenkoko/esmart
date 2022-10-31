@@ -1,9 +1,11 @@
-from modules import *
+from modules import PrecisionMultiClass, RecallMultiClass, get_labels, get_model, get_dip
 import tensorflow_addons as tfa
+import tensorflow as tf
+from tensorflow.keras import layers
 
 def train(config):
     model = get_model(config)
-    train, val = get_dip(config, context="training")
+    train, val = get_dip(config, context='training')
     metrics = [
         'accuracy',
         tfa.metrics.F1Score(
@@ -31,28 +33,28 @@ def train(config):
     ]
 
     model.compile(
-        optimizer= get_optimizer({{optimizer_1}}, {{learning_rate_1}}),
-        loss= {{ loss }},
+        optimizer= get_optimizer('{{optimizer_1}}', {{learning_rate_1}}),
+        loss= '{{ loss }}',
         metrics=metrics,
     )
     model.fit(
         train, 
         steps_per_epoch={{ steps_per_epoch }},
-        epochs={{ epochs }},
+        epochs={{ max_epochs }},
         validation_data=val,
         callbacks=callbacks,
         verbose=1)
 
     unfreeze_layers(model, unfreeze = {{ unfreeze }})
     model.compile(
-        optimizer= get_optimizer({{ optimizer_2 }}, {{ learning_rate_2 }}),
-        loss={{ loss }},
+        optimizer= get_optimizer('{{ optimizer_2 }}', {{ learning_rate_2 }}),
+        loss='{{ loss }}',
         metrics=metrics,
     )
     model.fit(
         train, 
         steps_per_epoch={{ steps_per_epoch }},
-        epochs={{ epochs }},
+        epochs={{ max_epochs }},
         validation_data=val,
         callbacks=callbacks,
         verbose=1)
@@ -63,7 +65,7 @@ def unfreeze_layers(model, unfreeze):
     if unfreeze == 'all':
         for layer in model.layers:
             if not isinstance(layer, layers.BatchNormalization):
-                self.config.log(f'unfreezing layer - {layer.name}')
+                print(f'unfreezing layer - {layer.name}')
                 layer.trainable = True
     elif unfreeze == 'none':
         for layer in model.layers[-None:]:
@@ -79,6 +81,6 @@ def get_optimizer(name, lr):
             optimizer = tf.keras.optimizers.SGD(learning_rate=lr)
         else:
             raise ValueError(
-                "invalid value train.loss={}".format(name)
+                'invalid value train.loss={}'.format(name)
             )
         return optimizer
