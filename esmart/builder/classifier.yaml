@@ -1,4 +1,4 @@
-import: []
+import: [normal]
 
 classifier:
   class_name: ClassifierBuilder
@@ -10,10 +10,6 @@ classifier:
   regularize: 
     type: l2
     penalty: 0.001
-  cls_layer:
-    dropout_rate: 0.3
-    activation: softmax
-    batch_normalization:
-        +++: +++
-        
-    
+  top_layer: 
+    type: normal_layer
+    +++: +++

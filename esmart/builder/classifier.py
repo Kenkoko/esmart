@@ -6,6 +6,8 @@ from esmart import Config, Dataset
 import importlib
 from tensorflow.keras import layers, models
 import tensorflow as tf
+from esmart.builder.top_layer.top_base import TopLayer
+
 
 class ClassifierBuilder(BaseBuilder):
     IMG_SIZE = {
@@ -49,17 +51,16 @@ class ClassifierBuilder(BaseBuilder):
             raise ValueError('pretrain_model must be in [none, efficientnet, resnet, convnext]')
         if pretrain_model != '':
             self.backbone = getattr(importlib.import_module(module), model_name)
-
+            self.model_name = model_name
 
         # hyperparameters
-        self.dropout_rate = self.get_option('cls_layer.dropout_rate')
         self.img_channels = self.get_option('img_channels')
         self.regularize = self.check_option('regularize.type', ['', 'l1', 'l2', 'l1_l2'])
         if self.get_option('img_size') != -1:
             self.img_size = self.get_option('img_size')
 
         self.config.log(f"Image size: {self.img_size}")
-        self.config.set(f'{configuration_key}.img_size', self.img_size, create=True)
+        self.config.set(f'{self.configuration_key}.img_size', self.img_size, create=True)
         self.config.save(os.path.join(self.config.folder, "config.yaml"))
 
         # augmentations
@@ -67,6 +68,7 @@ class ClassifierBuilder(BaseBuilder):
         self.custom_objects = {}
         if self.augmentations:
             augmentor: Augmentor = Augmentor(self.config, self.augmentations)
+            self.config.log(f"Augmentations: {augmentor.augmentations}")
             self.augmentations = augmentor.get_augmentations()
             self.custom_objects.update(augmentor.custom_augmentations)
         else:
@@ -76,6 +78,13 @@ class ClassifierBuilder(BaseBuilder):
         )
         self.augmentations = models.Sequential(self.augmentations, name="img_augmentation")
 
+        # top layer
+        self.top_layer: TopLayer = TopLayer.create(
+            config,
+            dataset,
+            self.configuration_key + ".top_layer",
+            init_for_load_only=init_for_load_only,
+        )
 
 
     def build_model(self, weight=None) -> tf.keras.Model:
@@ -85,32 +94,20 @@ class ClassifierBuilder(BaseBuilder):
         x = self.augmentations(inputs) if self.augmentations else inputs
 
         # list all augmentations
-        self.config.log(f"Augmentations: {self.augmentations.summary()}")
-
+        
         # backbone
         if self.backbone:
             model = self.backbone(include_top=False, input_tensor=x)
             model.trainable = False
             self.config.log(f"Backbone: {self.backbone.__name__}")
             
-            self.config.log(f"Backbone summary: {model.summary()}")
             x = model.output
-        
+
         # Rebuild top
-        x = layers.Dropout(self.dropout_rate, name='top_dropout_1')(x)
-        x = layers.GlobalAveragePooling2D(name="avg_pool")(x)
-        x = layers.experimental.SyncBatchNormalization(
-            **self.get_option('cls_layer.batch_normalization')
-        )(x)
-        self.config.log(f"Adding batch normalization - {self.get_option('cls_layer.batch_normalization')}")
-        x = layers.Dropout(self.dropout_rate, name="top_dropout_2")(x)
-        outputs = layers.Dense(
-            self.dataset.get_option('data_arg.num_classes'), 
-            activation=self.get_option('cls_layer.activation'),
-            name="pred")(x)
+        outputs = self.top_layer.build(x)
 
         # Compile
-        model = tf.keras.Model(inputs, outputs, name="EfficientNet")
+        model = tf.keras.Model(inputs, outputs, name=self.model_name)
         # adding regularization to all layers
         if not self.regularize == '':
             self.config.log(f"Adding regularization to all layers")
@@ -123,6 +120,9 @@ class ClassifierBuilder(BaseBuilder):
                 model, regularizer,
                 custom_objects=self.custom_objects if self.custom_objects else None,
                 except_layers=['pred'])
+
+        # save the model summary
+        model.summary(print_fn=self.config.log)
         if weight:
             model.set_weights(weight)
         return model

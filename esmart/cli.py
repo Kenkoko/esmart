@@ -212,7 +212,7 @@ def main():
 
     ## TODO: make this more easier to access devices
     gpu_id = config.get('job.device').split(", ")
-    if 'CPU' in gpu_id:
+    if 'CPU' in gpu_id or 'cpu' in gpu_id:
         tf.config.set_visible_devices([], 'GPU')
     else:
         gpus = tf.config.list_physical_devices('GPU')
