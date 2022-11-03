@@ -110,8 +110,8 @@ class ClassifierBuilder(BaseBuilder):
         model = tf.keras.Model(inputs, outputs, name=self.model_name)
         # adding regularization to all layers
         if not self.regularize == '':
-            self.config.log(f"Adding regularization to all layers")
             penalty = self.get_option('regularize.penalty')
+            self.config.log(f"Adding regularization {self.regularize} - penalty {penalty} to all layers")
             regularizer = getattr(
                 importlib.import_module('tensorflow.keras.regularizers'), 
                 self.regularize
