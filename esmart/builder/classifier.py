@@ -11,6 +11,7 @@ from esmart.builder.top_layer.top_base import TopLayer
 
 class ClassifierBuilder(BaseBuilder):
     IMG_SIZE = {
+        # https://keras.io/examples/vision/image_classification_efficientnet_fine_tuning/#:~:text=for%20each%20model%3A-,Base%20model,-resolution
         'efficientnet': {
             'b0': 224,
             'b1': 240,
@@ -20,6 +21,12 @@ class ClassifierBuilder(BaseBuilder):
             'b5': 456,
             'b6': 528,
             'b7': 600,
+        },
+        # https://github.com/keras-team/keras/blob/v2.10.0/keras/applications/efficientnet_v2.py#L1264-L1291
+        'efficientnet_v2': {
+            's': 384,
+            'm': 480,
+            'l': 480,
         },
     }
     def __init__(
@@ -73,10 +80,28 @@ class ClassifierBuilder(BaseBuilder):
             self.custom_objects.update(augmentor.custom_augmentations)
         else:
             self.augmentations = []
-        self.augmentations.append(
-            layers.experimental.preprocessing.RandomCrop(self.img_size, self.img_size)
-        )
-        self.augmentations = models.Sequential(self.augmentations, name="img_augmentation")
+        
+        # input alignment layer
+        train_img_size = self.config.get(f"{self.config.get('image_processor')}.training.size")
+        if train_img_size == -1:
+            train_img_size = self.img_size
+            self.config.set(f"{self.config.get('image_processor')}.training.size", self.img_size, create=True)
+            self.config.save(os.path.join(self.config.folder, "config.yaml"))
+
+        if train_img_size > self.img_size:
+            self.config.log(f"Training image size ({train_img_size}x{train_img_size}) is larger than classifier input shape ({self.img_size}x{self.img_size}).\n Random crop is applied.")
+            self.augmentations.append(
+                layers.experimental.preprocessing.RandomCrop(self.img_size, self.img_size)
+            )
+        elif train_img_size < self.img_size:
+            raise ValueError(f"Training image size ({train_img_size}x{train_img_size}) is smaller than classifier input shape ({self.img_size}x{self.img_size}).")
+        
+
+        # create the augmentation layer
+        if self.augmentations != []:
+            self.augmentations = models.Sequential(self.augmentations, name="img_augmentation")
+        else:
+            self.augmentations = None
 
         # top layer
         self.top_layer: TopLayer = TopLayer.create(
@@ -92,8 +117,6 @@ class ClassifierBuilder(BaseBuilder):
 
         # augmentations
         x = self.augmentations(inputs) if self.augmentations else inputs
-
-        # list all augmentations
         
         # backbone
         if self.backbone:
@@ -123,6 +146,10 @@ class ClassifierBuilder(BaseBuilder):
 
         # save the model summary
         model.summary(print_fn=self.config.log)
+        self.config.log(f'Number of non-trainable variables = {len(model.non_trainable_weights)}')
+        self.config.log(f'Number of trainable variables = {len(model.trainable_weights)} - {model.trainable_weights}')
+        self.config.log(f'Number of variables = {len(model.weights)}')
+
         if weight:
             model.set_weights(weight)
         return model
