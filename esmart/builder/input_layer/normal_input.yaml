@@ -1,0 +1,6 @@
+import: []
+
+normal_input:
+  class_name: NormalInputLayer
+  img_channels: 3
+  +++: +++

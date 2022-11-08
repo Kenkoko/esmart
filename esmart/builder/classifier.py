@@ -4,6 +4,8 @@ from esmart.augmentation.augmentor import Augmentor
 from esmart.builder.builder import BaseBuilder
 from esmart import Config, Dataset
 import importlib
+
+from esmart.builder.input_layer.input_base import InputLayer
 from tensorflow.keras import layers, models
 import tensorflow as tf
 from esmart.builder.top_layer.top_base import TopLayer
@@ -61,7 +63,7 @@ class ClassifierBuilder(BaseBuilder):
             self.model_name = model_name
 
         # hyperparameters
-        self.img_channels = self.get_option('img_channels')
+        
         self.regularize = self.check_option('regularize.type', ['', 'l1', 'l2', 'l1_l2'])
         if self.get_option('img_size') != -1:
             self.img_size = self.get_option('img_size')
@@ -96,6 +98,13 @@ class ClassifierBuilder(BaseBuilder):
         elif train_img_size < self.img_size:
             raise ValueError(f"Training image size ({train_img_size}x{train_img_size}) is smaller than classifier input shape ({self.img_size}x{self.img_size}).")
         
+        # input layer
+        self.input_layer: InputLayer = InputLayer.create(
+            self.config,
+            self.dataset,
+            self.configuration_key + '.input_layer',
+            init_for_load_only=init_for_load_only,
+        )
 
         # create the augmentation layer
         if self.augmentations != []:
@@ -113,7 +122,7 @@ class ClassifierBuilder(BaseBuilder):
 
 
     def build_model(self, weight=None) -> tf.keras.Model:
-        inputs = layers.Input(shape=(None, None, self.img_channels))
+        inputs = self.input_layer.build()
 
         # augmentations
         x = self.augmentations(inputs) if self.augmentations else inputs

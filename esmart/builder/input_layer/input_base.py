@@ -2,7 +2,7 @@
 from esmart import Config, Dataset, Configurable
 from esmart.misc import init_from
 
-class TopLayer(Configurable):
+class InputLayer(Configurable):
     def __init__(
         self, 
         config: Config,
@@ -22,17 +22,20 @@ class TopLayer(Configurable):
         dataset: Dataset,
         configuration_key: str,
         init_for_load_only=False,
-    ) -> "TopLayer":
-        """Factory method for top-layer creation."""
-
+    ) -> "InputLayer":
+        """Factory method for input-layer creation."""
+        print("InputLayer.create")
+        print("configuration_key: ", configuration_key)
+        print("config: ", config.options)
         try:
-            top_layer_type = config.get_default(configuration_key + ".type")
-            class_name = config.get(top_layer_type + ".class_name")
+            input_layer_type = config.get_default(configuration_key + ".type")
+            print("input_layer_type: ", input_layer_type)
+            class_name = config.get(input_layer_type + ".class_name")
         except:
             raise Exception("Can't find {}.type in config".format(configuration_key))
 
         try:
-            top_layer = init_from(
+            input_layer = init_from(
                 class_name,
                 config.get("modules"),
                 config,
@@ -40,9 +43,9 @@ class TopLayer(Configurable):
                 configuration_key,
                 init_for_load_only=init_for_load_only,
             )
-            return top_layer
+            return input_layer
         except:
             config.log(
-                f"Failed to create top-layer {top_layer_type} (class {class_name})."
+                f"Failed to create input-layer {input_layer_type} (class {class_name})."
             )
             raise

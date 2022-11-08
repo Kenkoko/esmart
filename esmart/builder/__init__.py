@@ -7,4 +7,8 @@ from esmart.builder.classifier import ClassifierBuilder
 
 # top layers
 from esmart.builder.top_layer.top_base import TopLayer
-from esmart.builder.top_layer.normal import NormalLayer
+from esmart.builder.top_layer.normal_top import NormalLayer
+
+# input layers
+from esmart.builder.input_layer.input_base import InputLayer
+from esmart.builder.input_layer.normal_input import NormalInputLayer

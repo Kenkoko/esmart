@@ -152,3 +152,37 @@ class PrecisionMultiClass(FBetaScore):
             precision = tf.reduce_mean(precision)
 
         return precision
+
+
+class MetricWrapper(tf.keras.metrics.Metric):
+    def __init__(self, num_classes: int, config: dict = {}, name='wrapper', metric_name: str = 'accuracy', **kwargs):
+        super().__init__(name=f'{metric_name}_{name}', **kwargs)
+        self.metric_name = metric_name
+        self.num_classes = num_classes
+        if metric_name == 'accuracy':
+            self.metric = tf.keras.metrics.Accuracy(**config)
+        elif metric_name == 'f1_score':
+            import tensorflow_addons as tfa
+            self.metric = tfa.metrics.F1Score(num_classes=self.num_classes, **config)
+        else:
+            raise ValueError(f'{metric_name} not supported')
+    def update_state(self, y_true, y_pred, sample_weight=None):
+        y_true = tf.reshape(y_true, (-1, self.num_classes))
+        y_pred = tf.reshape(y_pred, (-1, self.num_classes))
+        if self.metric_name in ['accuracy',]:
+            y_true = tf.argmax(y_true, axis=-1)
+            y_pred = tf.argmax(y_pred, axis=-1)
+        self.metric.update_state(y_true, y_pred, sample_weight)
+    def result(self):
+        return self.metric.result()
+    def reset_state(self):
+        self.metric.reset_state()
+    def reset_states(self):
+        self.metric.reset_states()
+    def get_config(self):
+        return {
+            'metric_name': self.metric_name,
+            'num_classes': self.num_classes,
+            'config': self.metric.get_config()
+        }
+

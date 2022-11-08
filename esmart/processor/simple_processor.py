@@ -14,7 +14,7 @@ class SimpleProcessor(BaseProcessor):
 
 
         builder_name = self.config.get('builder')
-        self.img_channels = self.config.get(f'{builder_name}.img_channels')
+        self.img_channels = self.config.get(f'{builder_name}.input_layer.img_channels')
         self.valid_img_size = self.config.get(f'{builder_name}.img_size')
 
 
