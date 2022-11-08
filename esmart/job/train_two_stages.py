@@ -61,7 +61,6 @@ class TrainingTwoStages(TrainingJob):
         self.history_first = checkpoint['history_first']
         self.history_second = checkpoint['history_second']
 
-
     def _prepare(self):
         """Construct dataloader"""
         super()._prepare()
@@ -81,7 +80,6 @@ class TrainingTwoStages(TrainingJob):
         self.ds_val = self.ds_val.map(self.parse_func['inference'], num_parallel_calls=tf.data.AUTOTUNE)
         self.ds_val = self.ds_val.batch(self.batch_size, drop_remainder=True)
         self.ds_val = self.ds_val.prefetch(buffer_size=tf.data.AUTOTUNE)
-
 
     def unfreeze_layers(self, model):
         if self.unfreeze == 'all': 

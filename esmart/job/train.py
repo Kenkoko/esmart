@@ -90,7 +90,7 @@ class TrainingJob(TrainingOrEvaluationJob):
             self.builder: BaseBuilder = BaseBuilder.create(config, dataset)
         else:
             self.builder: BaseBuilder = builder
-        self.loss = config.get("train.loss")
+        self.loss = self.create_loss(config.get("train.loss"))
         self.batch_size: int = config.get("train.batch_size")
         self.is_forward_only = forward_only
         self.shuffle_buffer_size = self.batch_size*config.get("train.shuffle_buffer_size_factor")
@@ -132,6 +132,9 @@ class TrainingJob(TrainingOrEvaluationJob):
             # hooks.append(_custom_handler)
             for f in Job.job_created_hooks:
                 f(self)
+
+    def create_loss(self, loss_name):
+        return loss_name
 
     # TODO: Move to eval class
     def create_metrics(self, eval_type):

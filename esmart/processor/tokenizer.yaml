@@ -1,0 +1,7 @@
+import: []
+
+Tokenizer:
+  class_name: Tokenizer
+  num_patches: 150
+  patch_size: 512
+  iobjects: [conductor_in_span, overhead_ground_wire, shield_wire, down_guy]
