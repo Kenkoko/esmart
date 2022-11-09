@@ -4,7 +4,7 @@ from typing import List
 
 import numpy as np
 import tensorflow as tf
-from shapely.geometry import LineString, Point
+from shapely.geometry import LineString, Point, MultiPoint
 
 from esmart.config import Config
 from esmart.processor.processor import BaseProcessor
@@ -197,8 +197,20 @@ class Tokenizer(BaseProcessor):
             for idx, grid in enumerate(grids):
                 if mask[idx] == 1:
                     continue
-                if point.x >= grid[0] and point.x <= grid[2] and point.y >= grid[1] and point.y <= grid[3]:
-                    mask[idx] = 1
+                try:
+                    if type(point) == Point:
+                        if point.x >= grid[0] and point.x <= grid[2] and point.y >= grid[1] and point.y <= grid[3]:
+                            mask[idx] = 1
+                    elif type(point) == MultiPoint:
+                        for p in point:
+                            if p.x >= grid[0] and p.x <= grid[2] and p.y >= grid[1] and p.y <= grid[3]:
+                                mask[idx] = 1
+                    else:
+                        raise ValueError(f"point type is not Point or MultiPoint")
+                except BaseException as e:
+                    print_fun(f"point: {point}")
+                    print_fun(f"grid: {grid}")
+                    raise e
 
 
         # crop and resize

@@ -38,7 +38,7 @@ class AttentionLayer(TopLayer):
         encoded_patches = PatchEncoder(self.num_patches, self.projection_dim)(x)
         for _ in range(self.transformer_layers):
             # Layer normalization 1.
-            x1 = layers.LayerNormalization(**self.get_option('LayerNormalization'))(encoded_patches)
+            x1 = layers.LayerNormalization(**self.get_option('layer_normalization'))(encoded_patches)
             # Create a multi-head attention layer.
             attention_output = layers.MultiHeadAttention(
                 num_heads=self.num_heads, key_dim=self.projection_dim, dropout=self.dropout_rate

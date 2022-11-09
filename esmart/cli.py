@@ -219,6 +219,8 @@ def main():
         config.log(f'GPU id: {gpu_id}')
         using_gpu = [gpus[int(id)] for id in gpu_id]
         tf.config.set_visible_devices(using_gpu, 'GPU')
+        for gpu in using_gpu:
+            tf.config.experimental.set_memory_growth(gpu, True)
 
 
     # overwrite configuration with command line arguments

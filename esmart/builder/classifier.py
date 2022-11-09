@@ -159,8 +159,8 @@ class ClassifierBuilder(BaseBuilder):
         # save the model summary
         model.summary(print_fn=self.config.log)
         self.config.log(f'Number of non-trainable variables = {len(model.non_trainable_weights)}')
-        self.config.log(f'Number of trainable variables = {len(model.trainable_weights)} - {model.trainable_weights}')
-        self.config.log(f'Number of variables = {len(model.weights)}')
+        self.config.log(f'Number of trainable variables = {len(model.trainable_weights)}')
+        # self.config.log(f'Number of variables = {len(model.weights)}')
 
         if weight:
             model.set_weights(weight)

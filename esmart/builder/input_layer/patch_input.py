@@ -23,7 +23,7 @@ class PatchInputLayer(InputLayer):
         self.config.log(f"Image channels: {self.img_channels}")
         self.config.log(f"Number of patches: {self.num_patches}")
         self.config.log(f"Patch size: {self.patch_size}")
-        input_layer = tf.keras.layers.Input(shape=(self.patch_size, self.num_patches, self.num_patches, self.img_channels))
+        input_layer = tf.keras.layers.Input(shape=(self.num_patches, self.patch_size, self.patch_size, self.img_channels))
         outputs = ExpandBatchDim()(input_layer)
         return outputs, input_layer
 
