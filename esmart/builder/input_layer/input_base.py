@@ -24,9 +24,6 @@ class InputLayer(Configurable):
         init_for_load_only=False,
     ) -> "InputLayer":
         """Factory method for input-layer creation."""
-        print("InputLayer.create")
-        print("configuration_key: ", configuration_key)
-        print("config: ", config.options)
         try:
             input_layer_type = config.get_default(configuration_key + ".type")
             print("input_layer_type: ", input_layer_type)
