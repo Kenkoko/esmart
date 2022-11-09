@@ -13,7 +13,7 @@ class InputLayer(Configurable):
         Configurable.__init__(self, config, configuration_key)
         self.dataset = dataset
         
-    def build(self, input_layer):
+    def build(self):
         raise NotImplementedError
 
     @staticmethod

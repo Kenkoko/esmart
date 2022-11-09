@@ -96,6 +96,16 @@ two_stages_training:
     name: 'adam'
     lr: 0.0001
 
+two_stages_training_ls:
+  class_name: TrainingTwoStagesLS
+  unfreeze: 'all'
+  optimizer_1:
+    name: 'adam'
+    lr: 0.001
+  optimizer_2:
+    name: 'adam'
+    lr: 0.0001
+
 image_processor: ''
 
 train: 

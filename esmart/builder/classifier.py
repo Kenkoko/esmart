@@ -122,24 +122,27 @@ class ClassifierBuilder(BaseBuilder):
 
 
     def build_model(self, weight=None) -> tf.keras.Model:
-        inputs = self.input_layer.build()
+        x, input_layer = self.input_layer.build()
 
         # augmentations
-        x = self.augmentations(inputs) if self.augmentations else inputs
+        if self.augmentations:
+            self.config.log(f"Apply augmentations")
+            x = self.augmentations(x)
+        else:
+            self.config.log(f"Apply nothing")
         
         # backbone
         if self.backbone:
             model = self.backbone(include_top=False, input_tensor=x)
             model.trainable = False
             self.config.log(f"Backbone: {self.backbone.__name__}")
-            
             x = model.output
 
         # Rebuild top
         outputs = self.top_layer.build(x)
 
         # Compile
-        model = tf.keras.Model(inputs, outputs, name=self.model_name)
+        model = tf.keras.Model(input_layer, outputs, name=self.model_name)
         # adding regularization to all layers
         if not self.regularize == '':
             penalty = self.get_option('regularize.penalty')

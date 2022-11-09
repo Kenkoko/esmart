@@ -335,7 +335,7 @@ class TrainingJob(TrainingOrEvaluationJob):
 
     def get_optimizer(self, name, lr):
         if name == 'adam':
-            optimizer = tf.keras.optimizers.Adam(learning_rate=lr)
+            optimizer = tf.keras.optimizers.Adam(learning_rate=lr, clipvalue=0.5)
         elif name == 'adagrad':
             optimizer = tf.keras.optimizers.Adagrad(learning_rate=lr)
         elif name == 'sgd':

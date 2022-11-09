@@ -181,6 +181,7 @@ class MetricWrapper(tf.keras.metrics.Metric):
         self.metric.reset_states()
     def get_config(self):
         return {
+            'name': self.name,
             'metric_name': self.metric_name,
             'num_classes': self.num_classes,
             'config': self.metric.get_config()

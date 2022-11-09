@@ -15,4 +15,4 @@ class NormalInputLayer(InputLayer):
 
     def build(self):
         outputs = layers.Input(shape=(None, None, self.img_channels))
-        return outputs
+        return outputs, outputs

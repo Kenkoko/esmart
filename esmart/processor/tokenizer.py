@@ -1,9 +1,15 @@
-from esmart.config import Config
-from esmart.processor.processor import BaseProcessor
-import tensorflow as tf
+import json
 from functools import partial
 from typing import List
+
+import numpy as np
+import tensorflow as tf
 from shapely.geometry import LineString, Point
+
+from esmart.config import Config
+from esmart.processor.processor import BaseProcessor
+
+import os
 
 class Tokenizer(BaseProcessor):
     def __init__(self, 
@@ -15,7 +21,7 @@ class Tokenizer(BaseProcessor):
         self.num_classes = self.config.get('dataset.data_arg.num_classes')
 
 
-        self.num_patches = self.get_option('num_patches')
+        self.maxium_patch = self.get_option('num_patches')
         self.patch_size = self.get_option('patch_size')
         self.iobjects = self.get_option('iobjects')
         builder_name = self.config.get('builder')
@@ -58,12 +64,12 @@ class Tokenizer(BaseProcessor):
         return annotation['labels']['objects']
 
     @staticmethod
-    def get_vertical_horizontal_lines(resize_w: int, resize_h: int) -> List:
+    def get_vertical_horizontal_lines(resize_w: int, resize_h: int, patch_size:int) -> List:
         vertical_linestrings = []
-        for i in range(0, resize_w, 512):
+        for i in range(0, resize_w, patch_size):
             vertical_linestrings.append(LineString([(i, 0), (i, resize_h)]))
         horizontal_linestrings = []
-        for i in range(0, resize_h, 512):
+        for i in range(0, resize_h, patch_size):
             horizontal_linestrings.append(LineString([(0, i), (resize_w, i)]))
         return vertical_linestrings, horizontal_linestrings
 
@@ -139,6 +145,9 @@ class Tokenizer(BaseProcessor):
         """
         # load image
         try:
+            # print_fun(f"load image: {imgpath}")
+            # if not os.path.exists(bytes.decode(imgpath.numpy())):
+            #     raise ValueError(f"{bytes.decode(imgpath.numpy())} is not exist")
             img_array = tf.image.decode_jpeg(
                 tf.io.read_file(imgpath), channels=img_channels)
         except BaseException as e:
@@ -163,7 +172,7 @@ class Tokenizer(BaseProcessor):
         resize_h = resize_with_pad_img.shape[0]
         assert resize_w % patch_size == 0 and resize_h % patch_size == 0, 'Resized image size WxH: {}x{}'.format(resize_w, resize_h)
 
-        vertical_linestrings, horizontal_linestrings = Tokenizer.get_vertical_horizontal_lines(resize_w, resize_h)
+        vertical_linestrings, horizontal_linestrings = Tokenizer.get_vertical_horizontal_lines(resize_w, resize_h, patch_size)
         conductor_linestring = Tokenizer.get_conductor_linestring(
             dict_line_list, 
             width * real_ratio, height * real_ratio, 
@@ -223,13 +232,13 @@ class Tokenizer(BaseProcessor):
     def get_processor(self, context: str) :
         if context in ["train", "valid"]:
             return partial(
-                Tokenizer.processor, 
-                patch_size=512, maxium_patch=150,
-                print_fun=self.config.log, 
-                img_channels=self.img_channels, 
+                Tokenizer.tokenizer, 
+                iobjects=self.iobjects,
                 patch_size=self.patch_size, 
                 maxium_patch=self.maxium_patch, 
+                img_channels=self.img_channels, 
+                print_fun=self.config.log, 
                 num_classes=self.num_classes,
-                iobjects=self.iobjects)
+            )
         else:
             raise Exception("Unknown context: {}".format(context))

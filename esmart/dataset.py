@@ -49,9 +49,16 @@ class Dataset(Configurable):
         labels = []
         for line in lines:
             parts = line[:-1].split('|||')
+            # filepaths.append(os.path.join(data_dir, parts[0]))
             filepaths.append(os.path.join(data_dir, parts[0]))
-            labels.append(self.class_names.index(parts[1]))
-        self.config.log(f'{file_data} contains {", ".join("{}: {}".format(self.class_names[k], v) for k, v in Counter(labels).most_common())}')
+            if os.path.exists(parts[1]):
+                labels.append(parts[1])
+            else:
+                labels.append(self.class_names.index(parts[1]))
+        # self.config.log(f'filepaths {filepaths}')
+        # self.config.log(f'labels {labels}')
+        if not os.path.exists(labels[1]):
+            self.config.log(f'{file_data} contains {", ".join("{}: {}".format(self.class_names[k], v) for k, v in Counter(labels).most_common())}')
         return filepaths, labels
 
     def upsampling_data(self, file_paths, labels):
@@ -101,7 +108,7 @@ class Dataset(Configurable):
                     raise ValueError('Need to input file train and folder path for training dataset')
                 self.config.log(f'Loading {key} from {self.file_train}')
                 file_paths, labels = self.read_filelist(self.file_train, self.folder_train)
-                if self.config.get(f"dataset.valid.data_dir") == '':
+                if self.config.get(f"dataset.valid.file") == '':
                     self.config.log(f"Validation director is None, create valid dataset from training dataset {self.file_train}")
                     X_train, X_valid, y_train, y_valid = train_test_split(
                         file_paths, labels, 
@@ -125,7 +132,7 @@ class Dataset(Configurable):
                 self._labels['train'] = y_train
 
             if key == 'valid':
-                if self.config.get(f"dataset.valid.data_dir") == '':
+                if self.config.get(f"dataset.valid.file") == '':
                     #TODO make this more informative
                     if self.file_train == '':
                         raise ValueError('Need to input file train and folder path for training dataset')
@@ -160,8 +167,8 @@ class Dataset(Configurable):
                 file_paths, labels = self.read_filelist(self.file_test, self.folder_test)
                 self._file_path['test'] = file_paths
                 self._labels['test'] = labels
-
-        self.config.log(f'{key} contains {", ".join("{}: {}".format(self.class_names[k], v) for k, v in Counter(self._labels[key]).most_common())}')
+        if not os.path.exists(self._labels[key][0]):
+            self.config.log(f'{key} contains {", ".join("{}: {}".format(self.class_names[k], v) for k, v in Counter(self._labels[key]).most_common())}')
         return self._file_path[key], self._labels[key]
 
     def split(self, split: str):
