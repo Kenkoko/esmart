@@ -29,10 +29,19 @@ class AttentionLayer(TopLayer):
             x = layers.Dropout(dropout_rate)(x)
         return x
 
+    @staticmethod
+    def conv_layer(x, kernel_size, num_conv=1):
+        for idx in range(num_conv):
+            x = layers.Conv2D(kernel_size // (idx + 1), 3, strides=2, padding="same")(x)
+            x = layers.experimental.SyncBatchNormalization()(x)
+            x = layers.Activation("relu")(x)
+        return x
+
     def build(self, input_layer):
         x = CollapseBatchDim(num_patches=self.num_patches)(input_layer)
-        x = layers.BatchNormalization()(x)
+        x = layers.experimental.SyncBatchNormalization()(x)
         x = layers.LeakyReLU()(x)
+        x = AttentionLayer.conv_layer(x, kernel_size=x.shape[-1], num_conv=4)
         x = layers.Reshape((self.num_patches, -1))(x)
         x = layers.Dense(self.projection_dim)(x)
         encoded_patches = PatchEncoder(self.num_patches, self.projection_dim)(x)
@@ -70,6 +79,12 @@ class CollapseBatchDim(layers.Layer):
         dim_2 = tf.shape(inputs)[2]
         dim_3 = tf.shape(inputs)[3]
         return tf.reshape(inputs, (batch_size // self.num_patches, self.num_patches, dim_1, dim_2, dim_3))
+    def get_config(self):
+        config = super().get_config()
+        config.update({
+            "num_patches": self.num_patches,
+        })
+        return config
 
 class PatchEncoder(tf.keras.layers.Layer):
     def __init__(self, num_patches, projection_dim):

@@ -12,7 +12,8 @@ from esmart.job.train_two_stages import TrainingTwoStages
 from esmart.processor.tokenizer import Tokenizer
 from esmart.util.custom_loss import LossWrapper
 from esmart.util.custom_metrics import MetricWrapper
-
+import os
+import tempfile
 
 class TrainingTwoStagesLS(TrainingJob):
 
@@ -87,6 +88,7 @@ class TrainingTwoStagesLS(TrainingJob):
         self.ds_train = self.ds_train.shuffle(buffer_size=self.shuffle_buffer_size)
         self.ds_train = self.ds_train.batch(self.batch_size, drop_remainder=True)
         self.ds_train = self.ds_train.prefetch(buffer_size=tf.data.AUTOTUNE)
+        self.ds_train = self.ds_train.cache(os.path.join('/mnt/disks/sdb/tmp_data', 'train.tmp'))
         self.ds_train = self.ds_train.repeat()
 
         self.config.log('Preparing the validation dataset')
@@ -96,6 +98,7 @@ class TrainingTwoStagesLS(TrainingJob):
             num_parallel_calls=tf.data.AUTOTUNE)
         self.ds_val = self.ds_val.batch(self.batch_size, drop_remainder=True)
         self.ds_val = self.ds_val.prefetch(buffer_size=tf.data.AUTOTUNE)
+        self.ds_val = self.ds_val.cache(os.path.join('/mnt/disks/sdb/tmp_data', 'val.tmp'))
 
     
     def _init_trace_entry(self, epoch):
@@ -135,57 +138,57 @@ class TrainingTwoStagesLS(TrainingJob):
                     layer.trainable = True
 
     def _run(self):
-        strategy = tf.distribute.MirroredStrategy()
-        with strategy.scope():
-            self.metrics = self.create_metrics(self.config.get('eval.type'))
-            self.model = self.builder.build_model(self.model_weight)
+        # strategy = tf.distribute.MirroredStrategy()
+        # with strategy.scope():
+        self.metrics = self.create_metrics(self.config.get('eval.type'))
+        self.model = self.builder.build_model(self.model_weight)
+        self.save(self.config.checkpoint_file(0))
+        if self.current_stage == None:
+            self.optimizer = self.optimizer_1
+            self.model.compile(
+                optimizer=self.optimizer,
+                loss=self.loss,
+                metrics=self.metrics,
+            )
+            self.config.log("Running first stage")
+            self.current_stage = 'first stage'
+            result_first = self.model.fit(
+                self.ds_train, 
+                steps_per_epoch=self.steps_per_epoch, 
+                epochs=self.max_epochs, 
+                validation_data=self.ds_val,
+                callbacks=self.callbacks, 
+                verbose=1)
+            self.config.log("Finished first stage")
+            self.history_first = result_first.history
+        ## TODO: IMPORTANT trace back, don't need to run if finished first stage
             self.save(self.config.checkpoint_file(0))
-            if self.current_stage == None:
-                self.optimizer = self.optimizer_1
-                self.model.compile(
-                    optimizer=self.optimizer,
-                    loss=self.loss,
-                    metrics=self.metrics,
-                )
-                self.config.log("Running first stage")
-                self.current_stage = 'first stage'
-                result_first = self.model.fit(
-                    self.ds_train, 
-                    steps_per_epoch=self.steps_per_epoch, 
-                    epochs=self.max_epochs, 
-                    validation_data=self.ds_val,
-                    callbacks=self.callbacks, 
-                    verbose=1)
-                self.config.log("Finished first stage")
-                self.history_first = result_first.history
-            ## TODO: IMPORTANT trace back, don't need to run if finished first stage
-                self.save(self.config.checkpoint_file(0))
 
-            if self.current_stage == 'first stage':
-                self.unfreeze_layers(self.model)
-                self.optimizer = self.optimizer_2
-                self.model.compile(
-                    optimizer=self.optimizer,
-                    loss=self.loss,
-                    #TODO accuracy to self.metrics
-                    metrics=self.metrics,
-                )
+        if self.current_stage == 'first stage':
+            self.unfreeze_layers(self.model)
+            self.optimizer = self.optimizer_2
+            self.model.compile(
+                optimizer=self.optimizer,
+                loss=self.loss,
+                #TODO accuracy to self.metrics
+                metrics=self.metrics,
+            )
 
-                self.config.log("Running second stage")
-                self.current_stage = 'second stage'
+            self.config.log("Running second stage")
+            self.current_stage = 'second stage'
 
-                result_second = self.model.fit(
-                    self.ds_train, 
-                    steps_per_epoch=self.steps_per_epoch, 
-                    epochs=self.max_epochs, 
-                    validation_data=self.ds_val, 
-                    callbacks=self.callbacks, 
-                    verbose=1)
+            result_second = self.model.fit(
+                self.ds_train, 
+                steps_per_epoch=self.steps_per_epoch, 
+                epochs=self.max_epochs, 
+                validation_data=self.ds_val, 
+                callbacks=self.callbacks, 
+                verbose=1)
 
-                self.trace(event="train_completed")
-                self.history_second = result_second.history
+            self.trace(event="train_completed")
+            self.history_second = result_second.history
 
-                self.current_stage = 'Training completed'
-                self.save(self.config.checkpoint_file(0))
+            self.current_stage = 'Training completed'
+            self.save(self.config.checkpoint_file(0))
         
         return (self.history_first, self.history_second)
