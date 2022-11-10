@@ -85,10 +85,10 @@ class TrainingTwoStagesLS(TrainingJob):
             lambda imgpath, map_file: tf.py_function(self.parse_func['training'], [imgpath, map_file], [tf.float32, tf.float32]), 
             num_parallel_calls=tf.data.AUTOTUNE
         )
+        self.ds_train = self.ds_train.cache(os.path.join('/mnt/disks/sdb/tmp_data', 'train.tmp'))
         self.ds_train = self.ds_train.shuffle(buffer_size=self.shuffle_buffer_size)
         self.ds_train = self.ds_train.batch(self.batch_size, drop_remainder=True)
         self.ds_train = self.ds_train.prefetch(buffer_size=tf.data.AUTOTUNE)
-        self.ds_train = self.ds_train.cache(os.path.join('/mnt/disks/sdb/tmp_data', 'train.tmp'))
         self.ds_train = self.ds_train.repeat()
 
         self.config.log('Preparing the validation dataset')
@@ -96,9 +96,9 @@ class TrainingTwoStagesLS(TrainingJob):
         self.ds_val = self.ds_val.map(
             lambda imgpath, map_file: tf.py_function(self.parse_func['inference'], [imgpath, map_file], [tf.float32, tf.float32]), 
             num_parallel_calls=tf.data.AUTOTUNE)
+        self.ds_val = self.ds_val.cache(os.path.join('/mnt/disks/sdb/tmp_data', 'val.tmp'))
         self.ds_val = self.ds_val.batch(self.batch_size, drop_remainder=True)
         self.ds_val = self.ds_val.prefetch(buffer_size=tf.data.AUTOTUNE)
-        self.ds_val = self.ds_val.cache(os.path.join('/mnt/disks/sdb/tmp_data', 'val.tmp'))
 
     
     def _init_trace_entry(self, epoch):
