@@ -89,7 +89,7 @@ class TrainingTwoStagesLS(TrainingJob):
         self.ds_train = self.ds_train.shuffle(buffer_size=self.shuffle_buffer_size)
         self.ds_train = self.ds_train.batch(self.batch_size, drop_remainder=True)
         self.ds_train = self.ds_train.prefetch(buffer_size=tf.data.AUTOTUNE)
-        self.ds_train = self.ds_train.repeat()
+        # self.ds_train = self.ds_train.repeat()
 
         self.config.log('Preparing the validation dataset')
         self.ds_val = tf.data.Dataset.from_tensor_slices(self.dataset.split('valid'))
@@ -154,7 +154,7 @@ class TrainingTwoStagesLS(TrainingJob):
             self.current_stage = 'first stage'
             result_first = self.model.fit(
                 self.ds_train, 
-                steps_per_epoch=self.steps_per_epoch, 
+                # steps_per_epoch=self.steps_per_epoch,
                 epochs=self.max_epochs, 
                 validation_data=self.ds_val,
                 callbacks=self.callbacks, 
@@ -179,7 +179,7 @@ class TrainingTwoStagesLS(TrainingJob):
 
             result_second = self.model.fit(
                 self.ds_train, 
-                steps_per_epoch=self.steps_per_epoch, 
+                # steps_per_epoch=self.steps_per_epoch, 
                 epochs=self.max_epochs, 
                 validation_data=self.ds_val, 
                 callbacks=self.callbacks, 
