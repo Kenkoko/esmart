@@ -2,6 +2,7 @@
 import datetime
 import argparse
 import os
+os.environ["CUDA_DEVICE_ORDER"] = 'PCI_BUS_ID'
 import sys
 import traceback
 import yaml

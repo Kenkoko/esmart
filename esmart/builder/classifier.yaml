@@ -7,8 +7,8 @@ classifier:
   img_size: -1
   augmentation: ''
   regularize: 
-    type: l2
-    penalty: 0.001
+    type: ''
+    +++: +++
   input_layer:
     type: normal_input
     img_channels: 3

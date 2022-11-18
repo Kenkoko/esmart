@@ -167,8 +167,8 @@ class Dataset(Configurable):
                 file_paths, labels = self.read_filelist(self.file_test, self.folder_test)
                 self._file_path['test'] = file_paths
                 self._labels['test'] = labels
-        if not os.path.exists(self._labels[key][0]):
-            self.config.log(f'{key} contains {", ".join("{}: {}".format(self.class_names[k], v) for k, v in Counter(self._labels[key]).most_common())}')
+        # if not os.path.exists(self._labels[key][0]):
+        self.config.log(f'{key} contains {", ".join("{}: {}".format(self.class_names[k], v) for k, v in Counter(self._labels[key]).most_common())}')
         return self._file_path[key], self._labels[key]
 
     def split(self, split: str):
