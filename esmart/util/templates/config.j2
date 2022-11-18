@@ -1,0 +1,12 @@
+def get_config():
+   return { 
+    "IMAGE_HEIGHT": {{ valid_image_size }},
+    "IMAGE_WIDTH": {{ valid_image_size }},
+    "CONF_THRESHOLD": 0.5,
+    "LABELS": {{ label_list }}
+   }
+
+def get_traning_config():
+   """
+   Return: the dictionary object containing key-value pairs for model usage
+   """

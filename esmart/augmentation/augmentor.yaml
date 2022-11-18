@@ -1,0 +1,17 @@
+import: []
+
+augmentor:
+    seed: 0
+    techniques: []
+brightness:
+    factor: 0.4
+    value_range: [0, 255]
+flip:
+    +++: +++
+rotation:
+    +++: +++
+translation:
+    +++: +++
+contrast: 
+    +++: +++
+

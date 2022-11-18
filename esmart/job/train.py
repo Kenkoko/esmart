@@ -1,13 +1,15 @@
 
 import gc
+from logging import StreamHandler
 import os
 from typing import Any, Callable, Dict, List, Optional
+from esmart.processor.processor import BaseProcessor
 
 import numpy as np
 import tensorflow as tf
 import tensorflow_addons as tfa
 
-from esmart.util.metric import RecallMultiClass, PrecisionMultiClass
+from esmart.util.custom_metrics import RecallMultiClass, PrecisionMultiClass
 from esmart import Config, Dataset
 from esmart.builder import BaseBuilder
 from esmart.job import Job, TrainingOrEvaluationJob
@@ -17,13 +19,15 @@ from tensorflow.keras.optimizers import Optimizer
 from esmart.util.metric import Metric
 from esmart.job.trace import Trace
 import matplotlib.pyplot as plt
+import torch
+import yaml
 
 def plot_hist(self, result):
     def merge_hist(dict_result):
         hist = {}
         
-        for history_callback in dict_result:
-            for key, value in history_callback.history.items():
+        for history in dict_result:
+            for key, value in history.items():
                 hist.setdefault(key, []).append(value)
 
         def flatten(l):
@@ -71,6 +75,7 @@ def trace_best_result(self, result):
         **best,
     )
 
+
 class TrainingJob(TrainingOrEvaluationJob):
     def __init__(
         self, 
@@ -85,7 +90,7 @@ class TrainingJob(TrainingOrEvaluationJob):
             self.builder: BaseBuilder = BaseBuilder.create(config, dataset)
         else:
             self.builder: BaseBuilder = builder
-        self.loss = config.get("train.loss")
+        self.loss = self.create_loss(config.get("train.loss"))
         self.batch_size: int = config.get("train.batch_size")
         self.is_forward_only = forward_only
         self.shuffle_buffer_size = self.batch_size*config.get("train.shuffle_buffer_size_factor")
@@ -93,7 +98,12 @@ class TrainingJob(TrainingOrEvaluationJob):
         self.train_split = config.get("train.split")
 
         self.metrics = None
-        self.parse_func = {}
+
+        # create processor 
+        self.processor: BaseProcessor = BaseProcessor.create(config)
+        self.parse_func = {
+            'inference': self.processor.get_processor('valid'),
+        }
 
         if not self.is_forward_only:
             self.optimizer: Optimizer = None
@@ -105,16 +115,12 @@ class TrainingJob(TrainingOrEvaluationJob):
             self.steps_per_epoch = config.get("train.steps_per_epoch")
 
             self.valid_trace: List[Dict[str, Any]] = []
-            self.training_img_size = self.config.get('train.parsing_img.training.size')
-            self.training_img_size = self.builder.image_size if self.training_img_size == -1 else self.training_img_size
-            self.parse_func['training'] = self.create_parse_func('training')
+            self.parse_func['training'] = self.processor.get_processor('train')
 
         # Hooks run after validation. The corresponding valid trace entry can be found
         # in self.valid_trace[-1] Signature: job
         self.post_valid_hooks: List[Callable[[Job], Any]] = []
 
-        self.inference_img_size = self.builder.image_size
-        self.parse_func['inference'] = self.create_parse_func('inference')
 
         self.ds_train = None
         self.ds_val = None
@@ -122,14 +128,19 @@ class TrainingJob(TrainingOrEvaluationJob):
         self.type_str: Optional[str] = None
 
         if self.__class__ == TrainingJob:
+            # hooks = Job.job_created_hooks.copy()
+            # hooks.append(_custom_handler)
             for f in Job.job_created_hooks:
                 f(self)
+
+    def create_loss(self, loss_name):
+        return loss_name
 
     # TODO: Move to eval class
     def create_metrics(self, eval_type):
         if eval_type == 'classification':
             ## TODO: make this configurable
-            return [
+            metrics = [
                 'accuracy',
                 tfa.metrics.F1Score(
                     num_classes=self.dataset.get_option('data_arg.num_classes'), 
@@ -144,6 +155,10 @@ class TrainingJob(TrainingOrEvaluationJob):
                     threshold=None, 
                     average='macro'
                 ),
+                # PrecisionMultiClass(
+                #     num_classes=self.dataset.get_option('data_arg.num_classes')),
+                # RecallMultiClass(
+                #     num_classes=self.dataset.get_option('data_arg.num_classes')),
 
             ]
         elif eval_type == 'object_detection':
@@ -152,23 +167,16 @@ class TrainingJob(TrainingOrEvaluationJob):
         else:
             raise ValueError(f'Unknow eval type: {eval_type}')
 
-    def create_parse_func(self, type_func):
-        def _parse_func(file_data, label):
-            img_size = getattr(self, f'{type_func}_img_size')
-            print(f'img_size {type_func}', img_size)
-            image_decoded = tf.image.decode_jpeg(
-                tf.io.read_file(file_data), channels=self.builder.get_option('img_channels'))
-            resize_method = self.config.get(f'train.parsing_img.{type_func}.method')
-            resize_func = getattr(tf.image, resize_method)
-            if resize_method == 'resize':
-                image_decoded = resize_func(image_decoded, (img_size, img_size))
-            elif resize_method == 'resize_with_pad':
-                image_decoded = resize_func(image_decoded, img_size, img_size)
-            else:
-                raise ValueError(f'Unknown resize method {resize_method}')
-            label = tf.one_hot(label, self.dataset.get_option('data_arg.num_classes'))
-            return image_decoded, label
-        return _parse_func
+        # logging metrics
+        for metric in metrics:
+            if type(metric) == str:
+                self.config.log(metric)
+                continue
+            metric_config = metric.get_config().copy()
+            self.config.log(metric_config['name'])
+            metric_config.pop('name', None)
+            self.config.log(yaml.dump(metric_config, default_flow_style=False), prefix="  ")
+        return metrics
 
     def create_current_trace(self, epoch, logs):
         self.current_trace["epoch"].update(
@@ -213,6 +221,7 @@ class TrainingJob(TrainingOrEvaluationJob):
 
     def _prepare(self):
         super()._prepare()
+        self.config.log(f'Preparing for training job')
         if not self.is_forward_only:
             ## logging
             tracer = tf.keras.callbacks.LambdaCallback(
@@ -239,11 +248,53 @@ class TrainingJob(TrainingOrEvaluationJob):
                 verbose=0)
             self.callbacks.append(best_model)
 
+            ## early stopping
+            es_callback = tf.keras.callbacks.EarlyStopping(monitor='loss', patience=10)
+            self.callbacks.append(es_callback)
+
             ## add hook
             ## TODO: make this configuarable
 
             self.post_run_hooks.append(plot_hist)
             self.post_run_hooks.append(trace_best_result)
+
+
+    def save(self, filename) -> None:
+        """Save current state to specified file"""
+        self.config.log("Saving checkpoint to {}...".format(filename))
+        checkpoint = self.save_to({})
+        torch.save(
+            checkpoint,
+            filename,
+        )
+        self.config.log("Saving completed")
+
+    def save_to(self, checkpoint: Dict) -> Dict:
+        """Adds trainjob specific information to the checkpoint"""
+        train_checkpoint = {
+            "type": "train",
+            "valid_trace": self.valid_trace,
+            # "lr_scheduler_state_dict": self.kge_lr_scheduler.state_dict(),
+            "job_id": self.job_id,
+        }
+        train_checkpoint = self.config.save_to(train_checkpoint)
+        checkpoint.update(train_checkpoint)
+        return checkpoint
+
+    def _load(self, checkpoint: Dict) -> str:
+        if checkpoint["type"] != "train":
+            raise ValueError("Training can only be continued on trained checkpoints")
+        self.valid_trace = checkpoint["valid_trace"]
+        self.resumed_from_job_id = checkpoint.get("job_id")
+        self.trace(
+            event="job_resumed",
+            checkpoint_file=checkpoint["file"],
+        )
+        self.config.log(
+            "Resuming training from {} of job {}".format(
+                checkpoint["file"], self.resumed_from_job_id
+            )
+        )
 
     @staticmethod
     def create(
@@ -284,11 +335,13 @@ class TrainingJob(TrainingOrEvaluationJob):
 
     def get_optimizer(self, name, lr):
         if name == 'adam':
-            optimizer = tf.keras.optimizers.Adam(learning_rate=lr)
+            optimizer = tf.keras.optimizers.Adam(learning_rate=lr, clipvalue=0.5)
         elif name == 'adagrad':
             optimizer = tf.keras.optimizers.Adagrad(learning_rate=lr)
         elif name == 'sgd':
             optimizer = tf.keras.optimizers.SGD(learning_rate=lr)
+        elif name == 'adadelta':
+            optimizer = tf.keras.optimizers.Adadelta(learning_rate=lr)
         else:
             raise ValueError(
                 "invalid value train.loss={}".format(name)

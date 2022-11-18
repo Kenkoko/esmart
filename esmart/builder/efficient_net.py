@@ -1,3 +1,4 @@
+import os
 import tensorflow as tf
 from esmart import Config, Dataset
 from esmart.builder.builder import BaseBuilder
@@ -5,6 +6,7 @@ from tensorflow import keras
 from tensorflow.keras import layers
 from tensorflow.keras.layers.experimental import preprocessing
 from tensorflow.keras.models import Sequential
+from esmart.augmentation.random_brightness import RandomBrightness
 
 class EfficientNetBuilder(BaseBuilder):
     def __init__(
@@ -53,6 +55,10 @@ class EfficientNetBuilder(BaseBuilder):
             self.EfficientNet = EfficientNet
         self.efficient_net_ver = self.get_option('efficient_net_ver')
         load_pretraind_efficient_net(self.efficient_net_ver)
+        # update config
+        self.config.set(f'{configuration_key}.img_size', self.image_size, create=True)
+        self.config.save(os.path.join(self.config.folder, "config.yaml"))
+
         self.img_channels = self.get_option('img_channels')
         self.shape = (None, None, self.img_channels,)
         self.augmentation = self.get_option('augmentation')
@@ -60,15 +66,16 @@ class EfficientNetBuilder(BaseBuilder):
         self.initial_weight = self.get_option('initial_weight')
 
 
-    def build_model(self) -> tf.keras.Model:
+    def build_model(self, weight=None) -> tf.keras.Model:
         inputs = layers.Input(shape=self.shape)
         #TODO: this
         img_augmentation = Sequential(
             [
+                RandomBrightness(0.4),
                 preprocessing.RandomFlip(mode='horizontal'),
                 preprocessing.RandomRotation(factor=0.15),
                 preprocessing.RandomTranslation(height_factor=0.1, width_factor=0.1),
-                preprocessing.RandomContrast(factor=0.1),
+                preprocessing.RandomContrast(factor=0.3),
                 preprocessing.RandomCrop(self.image_size, self.image_size),
             ],
             name="img_augmentation",
@@ -83,10 +90,12 @@ class EfficientNetBuilder(BaseBuilder):
         model.trainable = False
 
         # Rebuild top
-        x = layers.GlobalAveragePooling2D(name="avg_pool")(model.output)
-        x = layers.BatchNormalization()(x)
+        x = model.output
+        x = layers.Dropout(self.dropout, name='top_dropout_1')(x)
+        x = layers.GlobalAveragePooling2D(name="avg_pool")(x)
+        x = layers.experimental.SyncBatchNormalization()(x)
 
-        x = layers.Dropout(self.dropout, name="top_dropout")(x)
+        x = layers.Dropout(self.dropout, name="top_dropout_2")(x)
         outputs = layers.Dense(
             self.dataset.get_option('data_arg.num_classes'), 
             activation="softmax", 
@@ -94,5 +103,9 @@ class EfficientNetBuilder(BaseBuilder):
 
         # Compile
         model = tf.keras.Model(inputs, outputs, name="EfficientNet")
-        return keras.Model(inputs, outputs)
+        if weight:
+            model.set_weights(weight)
+        return model
+
+
 

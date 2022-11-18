@@ -1,0 +1,18 @@
+import: [normal_top, normal_input]
+
+classifier:
+  class_name: ClassifierBuilder
+  pretrain_model: efficientnet_v2
+  version: b3
+  img_size: -1
+  augmentation: ''
+  regularize: 
+    type: ''
+    +++: +++
+  input_layer:
+    type: normal_input
+    img_channels: 3
+    +++: +++
+  top_layer: 
+    type: normal_top
+    +++: +++

@@ -1,0 +1,8 @@
+import: []
+
+normal_top:
+  class_name: NormalLayer
+  dropout_rate: 0.3
+  activation: softmax
+  batch_normalization:
+    +++: +++

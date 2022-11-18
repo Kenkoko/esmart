@@ -20,6 +20,13 @@ console:
   format: {}
 
 
+# Cloud development code 
+cloud:
+  model_path: ''
+  model_id: ''
+  valid_dataset: [ ]
+  train_dataset: [ ]
+
 # The seeds of the PRNGs can be set manually for (increased) reproducibility.
 # Use -1 to disable explicit seeding.
 random_seed:
@@ -32,12 +39,12 @@ random_seed:
   python: -1
   torch: -1
   numpy: -1
-  numba: -1
+  tensorflow: -1
 
 # Python modules that should be searched for models, embedders, jobs, etc.
 # LibKGE may not respect the module order specified here, so make sure to use
 # unique names. See also options 'import' and 'model' below.
-modules: [ esmart.job, esmart.builder ]
+modules: [ esmart.job, esmart.builder, esmart.processor, esmart.builder.top_layer, esmart.builder.input_layer ]
 
 # Names of additional configuration files to import. When this entry contains
 # entry NAME, then the modules above are searched for a file NAME.yaml, and this
@@ -89,6 +96,18 @@ two_stages_training:
     name: 'adam'
     lr: 0.0001
 
+two_stages_training_ls:
+  class_name: TrainingTwoStagesLS
+  unfreeze: 'all'
+  optimizer_1:
+    name: 'adam'
+    lr: 0.001
+  optimizer_2:
+    name: 'adam'
+    lr: 0.0001
+
+image_processor: ''
+
 train: 
   split: train
   type: normal_training
@@ -98,12 +117,7 @@ train:
   batch_size: 64
   shuffle_buffer_size_factor: 8
   steps_per_epoch: 500
-  parsing_img:
-    training:
-      method: resize
-      size: -1 # take the img size of builder
-    inference:
-      method: resize
+  
 
   callbacks: 
     early_stop:

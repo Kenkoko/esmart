@@ -2,6 +2,7 @@
 import datetime
 import argparse
 import os
+os.environ["CUDA_DEVICE_ORDER"] = 'PCI_BUS_ID'
 import sys
 import traceback
 import yaml
@@ -11,6 +12,8 @@ from esmart import Config
 from esmart.job import Job
 from esmart.misc import get_git_revision_short_hash, esmart_base_dir, is_number
 # from esmart.util.dump import add_dump_parsers, dump
+# from esmart.util.package import add_package_parser, package
+from esmart.util.dev_code import add_dev_code_parser, dev_code
 from esmart.util.io import get_checkpoint_file, load_checkpoint
 from esmart.util.seed import seed_from_config
 import tensorflow as tf
@@ -119,7 +122,11 @@ def create_parser(config, additional_args=[]):
         help="Evaluate the result of a prior job using test data",
         parents=[parser_conf],
     )
-    for p in [parser_resume, parser_eval, parser_valid, parser_test]:
+    parser_dev = subparsers.add_parser(
+        "dev-code", help="Run development code", parents=[parser_conf]
+    )
+    add_dev_code_parser(parser_dev)
+    for p in [parser_resume, parser_eval, parser_valid, parser_test, parser_dev]:
         p.add_argument("config", type=str)
         p.add_argument(
             "--checkpoint",
@@ -160,6 +167,9 @@ def main():
     process_meta_command(
         args, "valid", {"command": "resume", "job.type": "eval", "eval.split": "valid"}
     )
+    # process_meta_command(
+    #     args, "dev-code", {"command": "resume"}
+    # )
     # dump command
     if args.command == "dump":
         raise NotImplemented
@@ -187,7 +197,7 @@ def main():
         config.load(args.config)
 
     # resume command
-    if args.command == "resume":
+    if args.command in ["resume", 'dev-code']:
         if os.path.isdir(args.config) and os.path.isfile(args.config + "/config.yaml"):
             args.config += "/config.yaml"
         if not vars(args)["console.quiet"]:
@@ -203,10 +213,15 @@ def main():
 
     ## TODO: make this more easier to access devices
     gpu_id = config.get('job.device').split(", ")
-    gpus = tf.config.list_physical_devices('GPU')
-    config.log(f'GPU id: {gpu_id}')
-    using_gpu = [gpus[int(id)] for id in gpu_id]
-    tf.config.set_visible_devices(using_gpu, 'GPU')
+    if 'CPU' in gpu_id or 'cpu' in gpu_id:
+        tf.config.set_visible_devices([], 'GPU')
+    else:
+        gpus = tf.config.list_physical_devices('GPU')
+        config.log(f'GPU id: {gpu_id}')
+        using_gpu = [gpus[int(id)] for id in gpu_id]
+        tf.config.set_visible_devices(using_gpu, 'GPU')
+        for gpu in using_gpu:
+            tf.config.experimental.set_memory_growth(gpu, True)
 
 
     # overwrite configuration with command line arguments
@@ -221,7 +236,7 @@ def main():
         ]:
             continue
         if value is not None:
-            if key == "search.device_pool":
+            if key in ["search.device_pool", "cloud.train_dataset", "cloud.valid_dataset"]:
                 value = "".join(value).split(",")
             try:
                 if isinstance(config.get(key), bool):
@@ -266,13 +281,20 @@ def main():
         # set random seeds
         seed_from_config(config)
 
+        
         # let's go
         if args.command == "start" and not args.run:
             config.log("Job created successfully.")
         else:
             # load data
             dataset = Dataset.create(config)
-
+            
+            if args.command == "dev-code":
+                training_jb_config = config.clone()
+                training_jb_config.set('console.quiet', True)
+                job = Job.create(training_jb_config, dataset)
+                dev_code(config, dataset, job)
+                exit()
             # let's go
             if args.command == "resume":
                 if checkpoint_file is not None:
@@ -289,6 +311,7 @@ def main():
                     )
             else:
                 job = Job.create(config, dataset)
+            
             job.run()
     except BaseException:
         tb = traceback.format_exc()

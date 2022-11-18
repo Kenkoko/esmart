@@ -1,0 +1,8 @@
+import: []
+
+tokenizer:
+  class_name: Tokenizer
+  num_patches: 150
+  patch_size: 512
+  training.size: 512 # TODO: Remove this
+  iobjects: [conductor_in_span, overhead_ground_wire, shield_wire, down_guy]
