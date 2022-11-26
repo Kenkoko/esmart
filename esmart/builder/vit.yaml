@@ -1,0 +1,10 @@
+import: []
+
+vit:
+  class_name: ViTBuilder
+  version: L_16
+  pretrain_model_on: imagenet21k
+  img_size: -1
+  augmentation: ''
+  input_layer:
+    img_channels: 3
