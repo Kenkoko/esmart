@@ -149,7 +149,7 @@ class TrainingTwoStagesLS(TrainingJob):
         strategy = tf.distribute.MirroredStrategy()
         with strategy.scope():
             self.metrics = self.create_metrics(self.config.get('eval.type'))
-            self.model = self.builder.build_model(self.model_weight)
+            self.model = self.get_model(self.model_weight)
             self.save(self.config.checkpoint_file(0))
             if self.current_stage == None:
                 self.optimizer = self.optimizer_1

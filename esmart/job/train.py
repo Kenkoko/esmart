@@ -1,26 +1,27 @@
 
 import gc
-from logging import StreamHandler
 import os
+from logging import StreamHandler
 from typing import Any, Callable, Dict, List, Optional
-from esmart.processor.processor import BaseProcessor
 
+import matplotlib.pyplot as plt
 import numpy as np
 import tensorflow as tf
 import tensorflow_addons as tfa
+import torch
+import yaml
+from gradient_accumulator.GAModelWrapper import GAModelWrapper
+from tensorflow.keras.optimizers import Optimizer
 
-from esmart.util.custom_metrics import RecallMultiClass, PrecisionMultiClass
 from esmart import Config, Dataset
 from esmart.builder import BaseBuilder
 from esmart.job import Job, TrainingOrEvaluationJob
-from esmart.job.trace import format_trace_entry
+from esmart.job.trace import Trace, format_trace_entry
 from esmart.misc import init_from
-from tensorflow.keras.optimizers import Optimizer
+from esmart.processor.processor import BaseProcessor
+from esmart.util.custom_metrics import PrecisionMultiClass, RecallMultiClass
 from esmart.util.metric import Metric
-from esmart.job.trace import Trace
-import matplotlib.pyplot as plt
-import torch
-import yaml
+
 
 def plot_hist(self, result):
     def merge_hist(dict_result):
@@ -92,6 +93,17 @@ class TrainingJob(TrainingOrEvaluationJob):
             self.builder: BaseBuilder = builder
         self.loss = self.create_loss(config.get("train.loss"))
         self.batch_size: int = config.get("train.batch_size")
+
+        if self.config.get("train.gradient_accumulator.active"):
+            if self.batch_size % self.config.get("train.gradient_accumulator.batch_size") != 0:
+                raise ValueError(f'batch_size must be divisible by gradient_accumulator.batch_size')
+
+            self.batch_size = self.batch_size / self.config.get("train.gradient_accumulator.steps")
+            if self.batch_size < 1:
+                raise ValueError(f'Batch size is too small for gradient accumulator. Batch size: {self.batch_size}')
+
+            self.batch_size = int(self.batch_size)
+
         self.is_forward_only = forward_only
         self.shuffle_buffer_size = self.batch_size*config.get("train.shuffle_buffer_size_factor")
         self.max_epochs = config.get("train.max_epochs")
@@ -348,7 +360,14 @@ class TrainingJob(TrainingOrEvaluationJob):
             )
         return optimizer
 
-
+    def get_model(self, weight = None) -> tf.keras.Model:
+        """Returns the model used for training."""
+        model = self.builder.build_model(weight)
+        if self.config.get("train.gradient_accumulator.active"):
+            ga_config =  self.config.get("train.gradient_accumulator").copy()
+            ga_config.pop('active')
+            model = GAModelWrapper(inputs=model.input, outputs=model.output, **ga_config)
+        return model
 
 
 

@@ -46,7 +46,7 @@ class TrainingJobNormal(TrainingJob):
 
     
     def _run(self):
-        model = self.builder.build_model()
+        model = self.get_model()
         self.metrics = self.create_metrics(self.config.get('eval.type'))
         model.compile(
             optimizer=self.optimizer,

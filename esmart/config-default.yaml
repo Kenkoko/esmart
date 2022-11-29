@@ -117,7 +117,11 @@ train:
   batch_size: 64
   shuffle_buffer_size_factor: 8
   steps_per_epoch: 500
-  
+
+  gradient_accumulator:
+    active: True
+    accum_steps: 4
+    +++: +++
 
   callbacks: 
     early_stop:
